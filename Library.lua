@@ -993,7 +993,9 @@ local function SectionBuilder(Container: Frame)
 			TextColor3 = RGB(255, 255, 255);
 			TextSize = 14;
 		})
-		Add("UIStroke", { Parent = SectionFrame; ApplyStrokeMode = ASM.Border; Color = RGB(32, 33, 36); Thickness = 1; })
+		local SectionStroke = Add("UIStroke", { Parent = SectionFrame; ApplyStrokeMode = ASM.Border; Color = Library.Theme.SectionBorder; Thickness = 1; })
+		Library.ThemeLink(SectionFrame, "BackgroundColor3", "Surface")
+		Library.ThemeLink(SectionStroke, "Color", "SectionBorder")
 		Add("UIPadding", {
 			Parent = Elements;
 			PaddingBottom = UD(0, 10);
@@ -1434,6 +1436,9 @@ Library.Elements.Dropdown = function(self: Library, propertyTable: {})
 		end
 	end
 
+	Dropdown.Frame = OptionList
+	Dropdown.Button = ButtonFrame
+
 	Dropdown.Close = function()
 		Dropdown.Open(false)
 	end
@@ -1446,7 +1451,6 @@ Library.Elements.Dropdown = function(self: Library, propertyTable: {})
 		if State then
 			ClaimPopup(Dropdown)
 
-			--@ the list tracks the control's width instead of the mockup's fixed 253
 			OptionList.Size = UFO(InputFrame.AbsoluteSize.X, 0)
 
 			local Target = UFO(
@@ -1454,29 +1458,26 @@ Library.Elements.Dropdown = function(self: Library, propertyTable: {})
 				InputFrame.AbsolutePosition.Y + InputFrame.AbsoluteSize.Y + 4
 			)
 
-			OptionList.Position = Target - UFO(0, 10)
+			OptionList.Position = Target - UFO(0, 8)
 			OptionList.Visible = true
-			Tween(OptionList, { Position = Target }, 0.25, ES.Quint)
+			Tween(OptionList, { Position = Target }, 0.22, ES.Quint)
 		else
 			OptionList.Visible = false
 			ReleasePopup(Dropdown)
 		end
 
-		Tween(Icon, { Rotation = State and 180 or 0 }, 0.2)
+		Tween(Icon, { Rotation = State and 180 or 0 }, 0.18)
 	end
 
-	--@ InputText is a button and InputFrame is Active, so both sink the click instead of
-	--@ letting it reach ButtonFrame; every layer of the row has to open the list itself
 	local LastToggle = 0
 
 	local function Activate()
-		--@ in case one click ever registers on more than one layer
-		if os.clock() - LastToggle < 0.1 then
+		if os.clock() - LastToggle < 0.18 then
 			return
 		end
-
 		LastToggle = os.clock()
-		Dropdown.Open()
+		--@ explicit toggle: second click on the control closes
+		Dropdown.Open(not OptionList.Visible)
 	end
 
 	for _, Object in { ButtonFrame, InputFrame } do
@@ -1484,7 +1485,6 @@ Library.Elements.Dropdown = function(self: Library, propertyTable: {})
 			if Input.UserInputType ~= UIT.MouseButton1 and Input.UserInputType ~= UIT.Touch then
 				return
 			end
-
 			Activate()
 		end)
 	end
@@ -1723,7 +1723,7 @@ Library.SubElements.Toggle = function(self: Library, propertyTable: {})
 	Add("UICorner", { Parent = Overlay; CornerRadius = UD(0, 6); }) 
 	Add("UIGradient", { Parent = Overlay; Color = CS{ CSK(0, RGB(78, 88, 129)), CSK(1, RGB(138, 156, 229)) }; Rotation = -90; }) 
 
-	Toggle.Set = function(state: boolean?)
+	Toggle.Set = function(state: boolean?, Silent: boolean?)
 		state = state or not Toggle.State
 		Toggle.State = state
 
@@ -1734,6 +1734,16 @@ Library.SubElements.Toggle = function(self: Library, propertyTable: {})
 			Library.Flags[Toggle.Flag] = Library.Flags[Toggle.Flag] or {}
 			Library.Flags[Toggle.Flag].Value = state
 			Library.Flags[Toggle.Flag].Set = Toggle.Set
+		end
+
+		if not Silent and Library.NotifyToggles and Library.Notify then
+			local Label = self.Text or Toggle.Flag or "Toggle"
+			Library.Notify({
+				Title = Label;
+				Text = state and "Enabled" or "Disabled";
+				Type = state and "Success" or "Info";
+				Duration = 1.6;
+			})
 		end
 
 		Toggle.Callback(state)
@@ -1748,7 +1758,7 @@ Library.SubElements.Toggle = function(self: Library, propertyTable: {})
 		Toggle.Set()
 	end)
 
-	Toggle.Set(Toggle.State)
+	Toggle.Set(Toggle.State, true)
 	return Toggle
 end
 
@@ -2343,8 +2353,99 @@ Library.Theme = {
 	Border = RGB(36, 37, 37),
 	SectionBorder = RGB(32, 33, 36),
 	Text = RGB(255, 255, 255),
-	TextDim = RGB(255, 255, 255),
+	TextDim = RGB(180, 184, 200),
 }
+
+Library.ThemeLinks = {} --@ { Object, Property, Key } or { Object, "Gradient", Key, Key2 }
+
+Library.ThemeLink = function(Object: Instance, Property: string, Key: string, Key2: string?)
+	if not Object then
+		return
+	end
+	TIS(Library.ThemeLinks, { Object = Object; Property = Property; Key = Key; Key2 = Key2 })
+end
+
+Library.ApplyTheme = function()
+	local T = Library.Theme
+	--@ drop dead links
+	local Alive = {}
+	for _, Link in Library.ThemeLinks do
+		if Link.Object and Link.Object.Parent then
+			TIS(Alive, Link)
+			if Link.Property == "Gradient" and Link.Object:IsA("UIGradient") then
+				local A = T[Link.Key] or T.AccentDark
+				local B = T[Link.Key2 or "Accent"] or T.Accent
+				Link.Object.Color = CS{ CSK(0, A), CSK(1, B) }
+			elseif Link.Property and Link.Object[Link.Property] ~= nil and T[Link.Key] then
+				pcall(function()
+					Link.Object[Link.Property] = T[Link.Key]
+				end)
+			end
+		end
+	end
+	Library.ThemeLinks = Alive
+
+	--@ window chrome
+	for _, Win in Library.Windows do
+		local Canvas = Win.Canvas
+		if not Canvas then continue end
+		Canvas.BackgroundColor3 = T.Background
+		local Header = Canvas:FindFirstChild("Header")
+		if Header then
+			Header.BackgroundColor3 = T.SurfaceAlt
+			local Stroke = Header:FindFirstChildOfClass("UIStroke")
+			if Stroke then Stroke.Color = T.Border end
+		end
+		local Footer = Canvas:FindFirstChild("Footer")
+		if Footer then
+			Footer.BackgroundColor3 = T.Surface
+			local Stroke = Footer:FindFirstChildOfClass("UIStroke")
+			if Stroke then Stroke.Color = T.Border end
+		end
+		local Sidebar = Canvas:FindFirstChild("Sidebar")
+		if Sidebar then
+			Sidebar.BackgroundColor3 = T.Surface
+		end
+	end
+
+	--@ sections
+	for _, Section in Library.Sections do
+		if Section.Frame then
+			Section.Frame.BackgroundColor3 = T.Surface
+			local Stroke = Section.Frame:FindFirstChildOfClass("UIStroke")
+			if Stroke then Stroke.Color = T.SectionBorder end
+			local Header = Section.Frame:FindFirstChild("Header")
+			if Header then
+				local Label = Header:FindFirstChild("Label")
+				if Label and Label:IsA("TextLabel") then
+					Label.TextColor3 = T.Text
+				end
+			end
+		end
+	end
+
+	--@ overlays
+	if Library.Watermark.Frame then
+		Library.Watermark.Frame.BackgroundColor3 = T.Surface
+		local Stroke = Library.Watermark.Frame:FindFirstChildOfClass("UIStroke")
+		if Stroke then Stroke.Color = T.Border end
+		if Library.Watermark.Accent then
+			Library.Watermark.Accent.BackgroundColor3 = T.Accent
+			local G = Library.Watermark.Accent:FindFirstChildOfClass("UIGradient")
+			if G then G.Color = CS{ CSK(0, T.AccentDark), CSK(1, T.Accent) } end
+		end
+	end
+	if Library.KeybindList.Frame then
+		Library.KeybindList.Frame.BackgroundColor3 = T.Surface
+		local Stroke = Library.KeybindList.Frame:FindFirstChildOfClass("UIStroke")
+		if Stroke then Stroke.Color = T.Border end
+		if Library.KeybindList.Accent then
+			Library.KeybindList.Accent.BackgroundColor3 = T.Accent
+		end
+		local Header = Library.KeybindList.Frame:FindFirstChild("Header")
+		if Header then Header.BackgroundColor3 = T.SurfaceAlt end
+	end
+end
 
 Library.Folder = "Lumen"
 Library.ConfigExtension = ".json"
@@ -2425,6 +2526,9 @@ Library.SetFlag = function(Flag: string, Value: any, Transparency: number?)
 	if Entry.Set then
 		if Transparency ~= nil then
 			Entry.Set(Value, Transparency)
+		elseif type(Value) == "boolean" then
+			--@ toggles: second arg Silent suppresses notifications while loading
+			Entry.Set(Value, true)
 		else
 			Entry.Set(Value)
 		end
@@ -2532,6 +2636,9 @@ Library.LoadConfig = function(Name: string)
 		return false
 	end
 	Library.LoadConfigData(Data)
+	if Library.ApplyTheme then
+		Library.ApplyTheme()
+	end
 	return true
 end
 
@@ -2692,7 +2799,7 @@ end
 Library.UIScale = 1
 
 Library.SetScale = function(Scale: number)
-	Scale = MC(Scale, 0.75, 1.25)
+	Scale = MC(Scale / (Scale > 2 and 100 or 1), 0.75, 1.25) --@ allow 75–125 or 0.75–1.25
 	Library.UIScale = Scale
 	for _, Win in Library.Windows do
 		if Win.Canvas then
@@ -2700,7 +2807,17 @@ Library.SetScale = function(Scale: number)
 			if not Existing then
 				Existing = Add("UIScale", { Parent = Win.Canvas })
 			end
+			--@ keep visual center stable while scaling
+			local Abs = Win.Canvas.AbsolutePosition
+			local Size = Win.Canvas.AbsoluteSize
+			local Center = Abs + Size * 0.5
 			Existing.Scale = Scale
+			task.defer(function()
+				if not Win.Canvas or not Win.Canvas.Parent then return end
+				local NewSize = Win.Canvas.AbsoluteSize
+				local NewPos = Center - NewSize * 0.5
+				Win.Canvas.Position = ClampToScreen(Win.Canvas, UFO(NewPos.X, NewPos.Y))
+			end)
 		end
 	end
 end
@@ -2751,16 +2868,17 @@ Library.SetWatermark = function(Text: string?, Enabled: boolean?)
 		Parent = Gui;
 		Name = "Watermark";
 		AnchorPoint = V2(0.5, 0);
-		Position = UD2(0.5, 0, 0, 14);
+		Position = UD2(0.5, 0, 0, 12);
 		AutomaticSize = AS.X;
-		Size = UFO(0, 30);
-		BackgroundColor3 = RGB(18, 18, 20);
+		Size = UFO(0, 32);
+		BackgroundColor3 = RGB(15, 14, 15);
 		BorderSizePixel = 0;
 		ZIndex = 120;
 		Visible = Library.Watermark.Enabled == true;
 	})
-	Add("UICorner", { Parent = Frame; CornerRadius = UD(0, 8); })
-	Add("UIStroke", { Parent = Frame; ApplyStrokeMode = ASM.Border; Color = RGB(40, 42, 48); })
+	Add("UICorner", { Parent = Frame; CornerRadius = UD(0, 7); })
+	Add("UIStroke", { Parent = Frame; ApplyStrokeMode = ASM.Border; Color = RGB(36, 37, 37); })
+	Add("UIShadow", { Parent = Frame; BlurRadius = UD(0, 16); Spread = UFO(4, 4); Transparency = 0.7; })
 	Add("UIPadding", { Parent = Frame; PaddingLeft = UD(0, 10); PaddingRight = UD(0, 12); })
 	Add("UIListLayout", {
 		Parent = Frame;
@@ -2774,74 +2892,72 @@ Library.SetWatermark = function(Text: string?, Enabled: boolean?)
 		Parent = Frame;
 		BackgroundColor3 = Library.Theme.Accent;
 		BorderSizePixel = 0;
-		Size = UFO(14, 14);
+		Size = UFO(16, 16);
 		LayoutOrder = 0;
 	})
-	Add("UICorner", { Parent = Logo; CornerRadius = UD(1, 0); })
+	Add("UICorner", { Parent = Logo; CornerRadius = UD(0, 4); })
 	Add("UIGradient", {
 		Parent = Logo;
 		Color = CS{ CSK(0, Library.Theme.AccentDark), CSK(1, Library.Theme.Accent) };
-		Rotation = 45;
+		Rotation = -45;
 	})
 
-	local Label = Add("TextLabel", {
-		Parent = Frame;
-		Name = "Label";
-		BackgroundTransparency = 1;
-		AutomaticSize = AS.X;
-		Size = UFO(0, 30);
-		FontFace = FN("rbxassetid://12187365364", FW.SemiBold, FS.Normal);
-		Text = Library.Watermark.Text;
-		TextColor3 = RGB(235, 236, 240);
-		TextSize = 13;
-		LayoutOrder = 1;
-	})
+	local function Chip(Text: string, Order: number, Dim: boolean?): TextLabel
+		local L = Add("TextLabel", {
+			Parent = Frame;
+			BackgroundTransparency = 1;
+			AutomaticSize = AS.X;
+			Size = UFO(0, 32);
+			FontFace = FN("rbxassetid://12187365364", FW.SemiBold, FS.Normal);
+			Text = Text;
+			TextColor3 = Dim and RGB(150, 154, 170) or RGB(235, 236, 240);
+			TextSize = 12;
+			LayoutOrder = Order;
+		})
+		return L
+	end
 
-	local Sep = Add("TextLabel", {
-		Parent = Frame;
-		BackgroundTransparency = 1;
-		AutomaticSize = AS.X;
-		Size = UFO(0, 30);
-		FontFace = FN("rbxassetid://12187365364", FW.SemiBold, FS.Normal);
-		Text = "·";
-		TextColor3 = RGB(120, 124, 140);
-		TextSize = 13;
-		LayoutOrder = 2;
-	})
+	local function Dot(Order: number)
+		return Chip("·", Order, true)
+	end
 
-	local Stats = Add("TextLabel", {
-		Parent = Frame;
-		Name = "Stats";
-		BackgroundTransparency = 1;
-		AutomaticSize = AS.X;
-		Size = UFO(0, 30);
-		FontFace = FN("rbxassetid://12187365364", FW.SemiBold, FS.Normal);
-		Text = "0 fps";
-		TextColor3 = RGB(160, 164, 180);
-		TextSize = 12;
-		LayoutOrder = 3;
-	})
+	local Title = Chip(Library.Watermark.Text or "Lumen", 1, false)
+	Dot(2)
+	local Place = Chip(game.PlaceName or "Game", 3, true)
+	Dot(4)
+	local FpsL = Chip("0 fps", 5, true)
+	Dot(6)
+	local PingL = Chip("0 ms", 7, true)
+	Dot(8)
+	local TimeL = Chip(os.date("%H:%M:%S"), 9, true)
 
 	Library.Watermark.Frame = Frame
-	Library.Watermark.Label = Label
-	Library.Watermark.Stats = Stats
+	Library.Watermark.Label = Title
+	Library.Watermark.Stats = FpsL
 	Library.Watermark.Accent = Logo
 
-	if not Library.Watermark._StatsConn then
-		local Frames = 0
-		local Last = os.clock()
-		Library.Watermark._StatsConn = RunService.RenderStepped:Connect(function()
-			Frames += 1
-			local Now = os.clock()
-			if Now - Last >= 1 then
-				if Library.Watermark.Stats then
-					Library.Watermark.Stats.Text = string.format("%d fps", Frames)
-				end
-				Frames = 0
-				Last = Now
-			end
-		end)
+	if Library.Watermark._StatsConn then
+		Library.Watermark._StatsConn:Disconnect()
 	end
+	local Frames, Last = 0, os.clock()
+	Library.Watermark._StatsConn = RunService.RenderStepped:Connect(function()
+		if not Library.Watermark.Enabled or not Frame.Parent then
+			return
+		end
+		Frames += 1
+		local Now = os.clock()
+		if Now - Last >= 1 then
+			FpsL.Text = string.format("%d fps", Frames)
+			local Ping = 0
+			pcall(function()
+				Ping = math.floor(game:GetService("Stats").Network.ServerStatsItem["Data Ping"]:GetValue())
+			end)
+			PingL.Text = string.format("%d ms", Ping)
+			TimeL.Text = os.date("%H:%M:%S")
+			Frames = 0
+			Last = Now
+		end
+	end)
 end
 
 Library.SetKeybindList = function(Enabled: boolean?)
@@ -2861,28 +2977,30 @@ Library.SetKeybindList = function(Enabled: boolean?)
 		Name = "KeybindList";
 		Position = UFO(16, 16);
 		AutomaticSize = AS.XY;
-		BackgroundColor3 = RGB(18, 18, 20);
+		BackgroundColor3 = RGB(15, 14, 15);
 		BorderSizePixel = 0;
 		ZIndex = 120;
 		Visible = Library.KeybindList.Enabled == true;
 	})
-	Add("UICorner", { Parent = Frame; CornerRadius = UD(0, 10); })
-	Add("UIStroke", { Parent = Frame; ApplyStrokeMode = ASM.Border; Color = RGB(40, 42, 48); })
-	Add("UIPadding", {
-		Parent = Frame;
-		PaddingLeft = UD(0, 12);
-		PaddingRight = UD(0, 12);
-		PaddingTop = UD(0, 10);
-		PaddingBottom = UD(0, 10);
-	})
-	Add("UIListLayout", { Parent = Frame; Padding = UD(0, 6); SortOrder = SO.LayoutOrder; })
+	Add("UICorner", { Parent = Frame; CornerRadius = UD(0, 8); })
+	Add("UIStroke", { Parent = Frame; ApplyStrokeMode = ASM.Border; Color = RGB(36, 37, 37); })
+	Add("UIShadow", { Parent = Frame; BlurRadius = UD(0, 16); Spread = UFO(4, 4); Transparency = 0.7; })
 
 	local Header = Add("Frame", {
 		Parent = Frame;
-		BackgroundTransparency = 1;
-		Size = UD2(1, 0, 0, 20);
-		LayoutOrder = -2;
+		Name = "Header";
+		BackgroundColor3 = RGB(20, 20, 21);
+		BorderSizePixel = 0;
+		Size = UD2(1, 0, 0, 34);
 	})
+	Add("UICorner", {
+		Parent = Header;
+		TopLeftRadius = UD(0, 8);
+		TopRightRadius = UD(0, 8);
+		BottomLeftRadius = UD(0, 0);
+		BottomRightRadius = UD(0, 0);
+	})
+	Add("UIPadding", { Parent = Header; PaddingLeft = UD(0, 12); PaddingRight = UD(0, 12); })
 	Add("UIListLayout", {
 		Parent = Header;
 		FillDirection = FD.Horizontal;
@@ -2896,19 +3014,41 @@ Library.SetKeybindList = function(Enabled: boolean?)
 		BorderSizePixel = 0;
 	})
 	Add("UICorner", { Parent = Dot; CornerRadius = UD(1, 0); })
+	Add("UIGradient", {
+		Parent = Dot;
+		Color = CS{ CSK(0, Library.Theme.AccentDark), CSK(1, Library.Theme.Accent) };
+		Rotation = -90;
+	})
 	Add("TextLabel", {
 		Parent = Header;
 		BackgroundTransparency = 1;
 		AutomaticSize = AS.X;
-		Size = UFO(0, 20);
+		Size = UFO(0, 34);
 		FontFace = FN("rbxassetid://12187365364", FW.SemiBold, FS.Normal);
 		Text = "Keybind list";
 		TextColor3 = RGB(235, 236, 240);
 		TextSize = 13;
 	})
 
-	local Cols = Add("Frame", {
+	local Body = Add("Frame", {
 		Parent = Frame;
+		Name = "Body";
+		BackgroundTransparency = 1;
+		Position = UFO(0, 34);
+		AutomaticSize = AS.XY;
+		Size = UFO(240, 0);
+	})
+	Add("UIPadding", {
+		Parent = Body;
+		PaddingLeft = UD(0, 10);
+		PaddingRight = UD(0, 10);
+		PaddingTop = UD(0, 8);
+		PaddingBottom = UD(0, 10);
+	})
+	Add("UIListLayout", { Parent = Body; Padding = UD(0, 4); SortOrder = SO.LayoutOrder; })
+
+	local Cols = Add("Frame", {
+		Parent = Body;
 		BackgroundTransparency = 1;
 		Size = UFO(220, 16);
 		LayoutOrder = -1;
@@ -2916,33 +3056,35 @@ Library.SetKeybindList = function(Enabled: boolean?)
 	Add("UIListLayout", {
 		Parent = Cols;
 		FillDirection = FD.Horizontal;
-		HorizontalFlex = UFA.Fill;
 		VerticalAlignment = VFA.Center;
 	})
-	for _, Title in { "Function", "Hotkey", "Status" } do
+	for i, Title in { "Function", "Hotkey", "Status" } do
 		Add("TextLabel", {
 			Parent = Cols;
 			BackgroundTransparency = 1;
-			Size = UFS(0.33, 1);
+			Size = UFO(i == 1 and 90 or 65, 16);
 			FontFace = FN("rbxassetid://12187365364", FW.SemiBold, FS.Normal);
 			Text = Title;
-			TextColor3 = RGB(120, 124, 140);
+			TextColor3 = RGB(110, 114, 130);
 			TextSize = 11;
 			TextXAlignment = TXA.Left;
 		})
 	end
 
+	BindDrag(Frame, Header, false)
+
 	Library.KeybindList.Frame = Frame
+	Library.KeybindList.Body = Body
 	Library.KeybindList.Rows = {}
 	Library.KeybindList.Accent = Dot
 end
 
 Library.UpdateKeybindList = function(Name: string, KeyText: string, Active: boolean?, Mode: string?)
-	if not Library.KeybindList.Frame then
-		Library.SetKeybindList(Library.KeybindList.Enabled)
-	end
 	if not Library.KeybindList.Enabled then
 		return
+	end
+	if not Library.KeybindList.Frame or not Library.KeybindList.Body then
+		Library.SetKeybindList(true)
 	end
 
 	Mode = Mode or "Toggle"
@@ -2950,26 +3092,24 @@ Library.UpdateKeybindList = function(Name: string, KeyText: string, Active: bool
 	local Row = Rows[Name]
 	if not Row then
 		Row = Add("Frame", {
-			Parent = Library.KeybindList.Frame;
-			BackgroundColor3 = RGB(28, 28, 32);
+			Parent = Library.KeybindList.Body;
+			BackgroundColor3 = RGB(28, 29, 34);
 			BackgroundTransparency = 1;
-			Size = UFO(220, 22);
+			Size = UFO(220, 24);
 			BorderSizePixel = 0;
 		})
 		Add("UICorner", { Parent = Row; CornerRadius = UD(0, 5); })
+		Add("UIPadding", { Parent = Row; PaddingLeft = UD(0, 6); PaddingRight = UD(0, 6); })
 		Add("UIListLayout", {
 			Parent = Row;
 			FillDirection = FD.Horizontal;
-			HorizontalFlex = UFA.Fill;
 			VerticalAlignment = VFA.Center;
-			Padding = UD(0, 4);
 		})
-		Add("UIPadding", { Parent = Row; PaddingLeft = UD(0, 6); PaddingRight = UD(0, 6); })
-		local N = Add("TextLabel", {
+		Add("TextLabel", {
 			Parent = Row;
 			Name = "Name";
 			BackgroundTransparency = 1;
-			Size = UFS(0.4, 1);
+			Size = UFO(90, 24);
 			FontFace = FN("rbxassetid://12187365364", FW.SemiBold, FS.Normal);
 			Text = Name;
 			TextColor3 = RGB(210, 212, 220);
@@ -2977,22 +3117,22 @@ Library.UpdateKeybindList = function(Name: string, KeyText: string, Active: bool
 			TextXAlignment = TXA.Left;
 			TextTruncate = ETT.AtEnd;
 		})
-		local K = Add("TextLabel", {
+		Add("TextLabel", {
 			Parent = Row;
 			Name = "Key";
 			BackgroundTransparency = 1;
-			Size = UFS(0.3, 1);
+			Size = UFO(65, 24);
 			FontFace = FN("rbxassetid://12187365364", FW.SemiBold, FS.Normal);
 			Text = KeyText;
 			TextColor3 = RGB(200, 204, 220);
 			TextSize = 12;
 			TextXAlignment = TXA.Left;
 		})
-		local S = Add("TextLabel", {
+		Add("TextLabel", {
 			Parent = Row;
 			Name = "Status";
 			BackgroundTransparency = 1;
-			Size = UFS(0.3, 1);
+			Size = UFO(65, 24);
 			FontFace = FN("rbxassetid://12187365364", FW.SemiBold, FS.Normal);
 			Text = Mode;
 			TextColor3 = RGB(140, 144, 160);
@@ -3004,31 +3144,14 @@ Library.UpdateKeybindList = function(Name: string, KeyText: string, Active: bool
 
 	local KeyLabel = Row:FindFirstChild("Key")
 	local StatusLabel = Row:FindFirstChild("Status")
-	local NameLabel = Row:FindFirstChild("Name")
 	if KeyLabel then KeyLabel.Text = KeyText or "None" end
 	if StatusLabel then StatusLabel.Text = Mode end
+
 	if Active then
 		Tween(Row, { BackgroundTransparency = 0 }, 0.12)
-		if NameLabel then NameLabel.TextTransparency = 0 end
 	else
 		Tween(Row, { BackgroundTransparency = 1 }, 0.12)
-		if NameLabel then NameLabel.TextTransparency = 0.15 end
 	end
-end
-
-local function NotifyAnchor(): (Vector2, Vector2)
-	local Pos = Library.NotifyPosition or "Top Right"
-	local Cam = workspace.CurrentCamera
-	local VP = Cam and Cam.ViewportSize or V2(1920, 1080)
-	local Pad = 16
-	if Pos == "Top Left" then
-		return V2(0, 0), V2(Pad, Pad)
-	elseif Pos == "Bottom Left" then
-		return V2(0, 1), V2(Pad, -Pad)
-	elseif Pos == "Bottom Right" then
-		return V2(1, 1), V2(-Pad, -Pad)
-	end
-	return V2(1, 0), V2(-Pad, Pad) -- Top Right
 end
 
 Library.Notify = function(propertyTable: {})
@@ -3036,7 +3159,7 @@ Library.Notify = function(propertyTable: {})
 		Title = "Lumen";
 		Text = "";
 		Duration = 3;
-		Type = "Info"; -- Info / Success / Warn / Error
+		Type = "Info";
 	}, propertyTable or {})
 
 	local Gui = EnsureOverlayGui()
@@ -3051,99 +3174,155 @@ Library.Notify = function(propertyTable: {})
 		})
 		Add("UIListLayout", {
 			Parent = Library._NotifyHost;
-			Padding = UD(0, 8);
+			Padding = UD(0, 10);
 			SortOrder = SO.LayoutOrder;
 			HorizontalAlignment = HFA.Right;
 		})
 	end
 
-	local Anchor, Offset = NotifyAnchor()
-	Library._NotifyHost.AnchorPoint = Anchor
-	Library._NotifyHost.Position = UFO(Offset.X < 0 and workspace.CurrentCamera.ViewportSize.X + Offset.X or Offset.X, Offset.Y < 0 and workspace.CurrentCamera.ViewportSize.Y + Offset.Y or Offset.Y)
-	--@ simpler placement via UDim2 scale
 	local Pos = Library.NotifyPosition or "Top Right"
+	local Layout = Library._NotifyHost:FindFirstChildOfClass("UIListLayout")
 	if Pos == "Top Left" then
 		Library._NotifyHost.AnchorPoint = V2(0, 0)
 		Library._NotifyHost.Position = UFO(16, 16)
-		Library._NotifyHost:FindFirstChildOfClass("UIListLayout").HorizontalAlignment = HFA.Left
+		Layout.HorizontalAlignment = HFA.Left
 	elseif Pos == "Bottom Left" then
 		Library._NotifyHost.AnchorPoint = V2(0, 1)
 		Library._NotifyHost.Position = UD2(0, 16, 1, -16)
-		Library._NotifyHost:FindFirstChildOfClass("UIListLayout").HorizontalAlignment = HFA.Left
+		Layout.HorizontalAlignment = HFA.Left
 	elseif Pos == "Bottom Right" then
 		Library._NotifyHost.AnchorPoint = V2(1, 1)
 		Library._NotifyHost.Position = UD2(1, -16, 1, -16)
-		Library._NotifyHost:FindFirstChildOfClass("UIListLayout").HorizontalAlignment = HFA.Right
+		Layout.HorizontalAlignment = HFA.Right
 	else
 		Library._NotifyHost.AnchorPoint = V2(1, 0)
 		Library._NotifyHost.Position = UD2(1, -16, 0, 16)
-		Library._NotifyHost:FindFirstChildOfClass("UIListLayout").HorizontalAlignment = HFA.Right
+		Layout.HorizontalAlignment = HFA.Right
 	end
 
 	local Accent = Library.Theme.Accent
-	if Props.Type == "Success" then Accent = RGB(80, 200, 120)
-	elseif Props.Type == "Warn" then Accent = RGB(230, 180, 60)
-	elseif Props.Type == "Error" then Accent = RGB(230, 80, 90) end
+	if Props.Type == "Success" then Accent = RGB(90, 200, 130)
+	elseif Props.Type == "Warn" then Accent = RGB(230, 180, 70)
+	elseif Props.Type == "Error" then Accent = RGB(230, 85, 95) end
+
+	local SlideFrom = (Pos:find("Left") and -20) or 20
 
 	local Card = Add("Frame", {
 		Parent = Library._NotifyHost;
+		Size = UFO(290, 0);
 		AutomaticSize = AS.Y;
-		Size = UFO(280, 0);
-		BackgroundColor3 = RGB(18, 18, 20);
+		BackgroundColor3 = RGB(15, 14, 15);
 		BorderSizePixel = 0;
 		ZIndex = 201;
+		ClipsDescendants = true;
 	})
 	Add("UICorner", { Parent = Card; CornerRadius = UD(0, 8); })
-	Add("UIStroke", { Parent = Card; ApplyStrokeMode = ASM.Border; Color = RGB(40, 42, 48); })
-	local Bar = Add("Frame", {
+	Add("UIStroke", { Parent = Card; ApplyStrokeMode = ASM.Border; Color = RGB(36, 37, 37); })
+	Add("UIShadow", { Parent = Card; BlurRadius = UD(0, 18); Spread = UFO(4, 4); Transparency = 0.65; })
+
+	local AccentBar = Add("Frame", {
 		Parent = Card;
 		BackgroundColor3 = Accent;
 		BorderSizePixel = 0;
 		Size = UD2(0, 3, 1, 0);
+		ZIndex = 202;
 	})
-	Add("UICorner", { Parent = Bar; CornerRadius = UD(0, 2); })
+	Add("UIGradient", {
+		Parent = AccentBar;
+		Color = CS{ CSK(0, Accent), CSK(1, Library.Theme.AccentDark) };
+		Rotation = 90;
+	})
+
+	local Content = Add("Frame", {
+		Parent = Card;
+		BackgroundTransparency = 1;
+		Position = UFO(12, 0);
+		Size = UD2(1, -16, 0, 0);
+		AutomaticSize = AS.Y;
+	})
 	Add("UIPadding", {
-		Parent = Card;
-		PaddingLeft = UD(0, 14);
-		PaddingRight = UD(0, 12);
-		PaddingTop = UD(0, 10);
-		PaddingBottom = UD(0, 10);
+		Parent = Content;
+		PaddingTop = UD(0, 12);
+		PaddingBottom = UD(0, 14);
+		PaddingRight = UD(0, 8);
 	})
+	Add("UIListLayout", { Parent = Content; Padding = UD(0, 4); SortOrder = SO.LayoutOrder; })
+
 	Add("TextLabel", {
-		Parent = Card;
+		Parent = Content;
 		BackgroundTransparency = 1;
 		Size = UD2(1, 0, 0, 16);
 		FontFace = FN("rbxassetid://12187365364", FW.SemiBold, FS.Normal);
 		Text = Props.Title;
-		TextColor3 = RGB(235, 236, 240);
+		TextColor3 = RGB(240, 241, 245);
 		TextSize = 13;
 		TextXAlignment = TXA.Left;
+		LayoutOrder = 1;
 	})
 	if Props.Text ~= "" then
 		Add("TextLabel", {
-			Parent = Card;
+			Parent = Content;
 			BackgroundTransparency = 1;
-			Position = UFO(0, 18);
 			AutomaticSize = AS.Y;
 			Size = UD2(1, 0, 0, 0);
 			FontFace = FN("rbxassetid://12187365364", FW.SemiBold, FS.Normal);
 			Text = Props.Text;
-			TextColor3 = RGB(160, 164, 180);
+			TextColor3 = RGB(155, 158, 175);
 			TextSize = 12;
 			TextWrapped = true;
 			TextXAlignment = TXA.Left;
+			LayoutOrder = 2;
 		})
 	end
 
+	--@ progress bar along the bottom
+	local ProgressBG = Add("Frame", {
+		Parent = Card;
+		AnchorPoint = V2(0, 1);
+		Position = UFS(0, 1);
+		Size = UD2(1, 0, 0, 2);
+		BackgroundColor3 = RGB(28, 29, 34);
+		BorderSizePixel = 0;
+		ZIndex = 203;
+	})
+	local Progress = Add("Frame", {
+		Parent = ProgressBG;
+		BackgroundColor3 = Accent;
+		BorderSizePixel = 0;
+		Size = UFS(1, 1);
+		ZIndex = 204;
+	})
+	Add("UIGradient", {
+		Parent = Progress;
+		Color = CS{ CSK(0, Library.Theme.AccentDark), CSK(1, Accent) };
+	})
+
+	Card.Position = UFO(SlideFrom, 0)
 	Card.BackgroundTransparency = 1
-	Tween(Card, { BackgroundTransparency = 0 }, 0.2)
-	task.delay(Props.Duration, function()
-		if Card and Card.Parent then
-			Tween(Card, { BackgroundTransparency = 1 }, 0.25)
-			task.wait(0.25)
-			Card:Destroy()
+	for _, D in Card:GetDescendants() do
+		if D:IsA("TextLabel") then
+			D.TextTransparency = 1
 		end
+	end
+
+	Tween(Card, { Position = UFO(0, 0), BackgroundTransparency = 0 }, 0.35, ES.Quint)
+	for _, D in Card:GetDescendants() do
+		if D:IsA("TextLabel") then
+			Tween(D, { TextTransparency = D.Name == "" and 0 or (D.TextColor3 == RGB(155, 158, 175) and 0 or 0) }, 0.3)
+			--@ simplify: full visible
+			D.TextTransparency = 0
+		end
+	end
+
+	Tween(Progress, { Size = UD2(0, 0, 1, 0) }, Props.Duration, ES.Linear)
+
+	task.delay(Props.Duration, function()
+		if not Card or not Card.Parent then return end
+		Tween(Card, { Position = UFO(SlideFrom, 0), BackgroundTransparency = 1 }, 0.3, ES.Quad)
+		task.wait(0.32)
+		if Card then Card:Destroy() end
 	end)
+
 	return Card
 end
 
@@ -3191,18 +3370,108 @@ end)
 --@ build Config page UI onto a window
 Library.BuildConfigPage = function(self: Library, Window: any)
 	local Page = Window:Page({ Icon = "save" })
-	local Manager = Page:SubPage({ Name = "Manager" })
+	local Manager = Page:SubPage({ Name = "Configs" })
 	local ThemePage = Page:SubPage({ Name = "Theme" })
+	local MenuPage = Page:SubPage({ Name = "Menu" })
 
 	local ListSection = Manager:Section({ Name = "Configs"; Side = "Left"; Icon = "folder" })
-	local InfoSection = Manager:Section({ Name = "Info"; Side = "Right"; Icon = "info" })
+	local ActionsSection = Manager:Section({ Name = "Actions"; Side = "Right"; Icon = "settings" })
 	local ThemeSection = ThemePage:Section({ Name = "Colors"; Side = "Left"; Icon = "palette" })
-	local MenuSection = ThemePage:Section({ Name = "Menu"; Side = "Right"; Icon = "settings" })
+	local ThemePrev = ThemePage:Section({ Name = "Preview"; Side = "Right"; Icon = "eye" })
+	local MenuSection = MenuPage:Section({ Name = "Menu"; Side = "Left"; Icon = "settings" })
+	local NotifySection = MenuPage:Section({ Name = "Notifications"; Side = "Right"; Icon = "bell" })
 
-	local Selected = { Name = "default" }
+	local Selected = { Name = nil :: string? }
+	local ListRows = {} :: { [string]: TextButton }
 
-	local ConfigInput = ListSection:Input({
-		Name = "Config name";
+	local ListHost = Add("Frame", {
+		Parent = ListSection.Content;
+		Name = "ConfigList";
+		BackgroundColor3 = Library.Theme.Background;
+		BorderSizePixel = 0;
+		Size = UD2(1, 0, 0, 160);
+	})
+	Add("UICorner", { Parent = ListHost; CornerRadius = UD(0, 6); })
+	Add("UIStroke", { Parent = ListHost; ApplyStrokeMode = ASM.Border; Color = Library.Theme.Border; })
+	local ListScroll = Add("ScrollingFrame", {
+		Parent = ListHost;
+		BackgroundTransparency = 1;
+		BorderSizePixel = 0;
+		Size = UFS(1, 1);
+		CanvasSize = UD2(0, 0, 0, 0);
+		AutomaticCanvasSize = AS.Y;
+		ScrollBarThickness = 2;
+		ScrollBarImageColor3 = Library.Theme.Accent;
+	})
+	Add("UIListLayout", { Parent = ListScroll; Padding = UD(0, 2); SortOrder = SO.LayoutOrder; })
+	Add("UIPadding", { Parent = ListScroll; PaddingTop = UD(0, 4); PaddingBottom = UD(0, 4); PaddingLeft = UD(0, 4); PaddingRight = UD(0, 4); })
+
+	local function PaintRows()
+		for Name, Row in ListRows do
+			local On = Selected.Name == Name
+			Row.TextColor3 = On and Library.Theme.Accent or RGB(200, 204, 220)
+			Row.BackgroundTransparency = On and 0.85 or 1
+			Row.BackgroundColor3 = Library.Theme.Accent
+		end
+	end
+
+	local function SelectConfig(Name: string)
+		Selected.Name = Name
+		if ConfigInput then
+			ConfigInput.Set(Name)
+		end
+		PaintRows()
+	end
+
+	local function RebuildList()
+		for _, Row in ListRows do
+			Row:Destroy()
+		end
+		table.clear(ListRows)
+		local Names = Library.ListConfigs()
+		if #Names == 0 then
+			local Empty = Add("TextLabel", {
+				Parent = ListScroll;
+				BackgroundTransparency = 1;
+				Size = UD2(1, 0, 0, 28);
+				FontFace = FN("rbxassetid://12187365364", FW.SemiBold, FS.Normal);
+				Text = "No configs yet";
+				TextColor3 = RGB(120, 124, 140);
+				TextSize = 12;
+			})
+			ListRows["__empty"] = Empty :: any
+		else
+			for i, Name in Names do
+				local Row = Add("TextButton", {
+					Parent = ListScroll;
+					AutoButtonColor = false;
+					BackgroundColor3 = Library.Theme.Accent;
+					BackgroundTransparency = 1;
+					BorderSizePixel = 0;
+					Size = UD2(1, 0, 0, 26);
+					FontFace = FN("rbxassetid://12187365364", FW.SemiBold, FS.Normal);
+					Text = "  " .. Name;
+					TextColor3 = RGB(200, 204, 220);
+					TextSize = 13;
+					TextXAlignment = TXA.Left;
+					LayoutOrder = i;
+				})
+				Add("UICorner", { Parent = Row; CornerRadius = UD(0, 4); })
+				Row.Activated:Connect(function()
+					SelectConfig(Name)
+				end)
+				ListRows[Name] = Row
+			end
+		end
+		if Selected.Name and ListRows[Selected.Name] then
+			PaintRows()
+		elseif #Names > 0 then
+			SelectConfig(Names[1])
+		end
+	end
+
+	local ConfigInput = ActionsSection:Input({
+		Name = "Config Name";
 		Value = "default";
 		Placeholder = "name";
 		Flag = "ConfigName";
@@ -3210,28 +3479,6 @@ Library.BuildConfigPage = function(self: Library, Window: any)
 			Selected.Name = Value
 		end;
 	})
-
-	local ConfigDropdown = ListSection:Dropdown({
-		Name = "Saved configs";
-		Options = Library.ListConfigs();
-		Value = Library.ListConfigs()[1] or "";
-		Search = true;
-		Flag = "ConfigSelected";
-		Callback = function(Value)
-			if Value and Value ~= "" then
-				Selected.Name = Value
-				ConfigInput.Set(Value)
-			end
-		end;
-	})
-
-	local function ReloadList()
-		local Names = Library.ListConfigs()
-		ConfigDropdown.UpdateOptions(Names)
-		if Selected.Name and #Names > 0 then
-			ConfigDropdown.Set(Selected.Name)
-		end
-	end
 
 	local function CurrentName(): string
 		local Name = ConfigInput.Value
@@ -3241,129 +3488,107 @@ Library.BuildConfigPage = function(self: Library, Window: any)
 		return Name
 	end
 
-	local Status = InfoSection:Paragraph({
-		Title = "Status";
-		Body = "No config loaded";
-	})
-	local Meta = InfoSection:Paragraph({
-		Title = "Details";
-		Body = "Save a profile to store flags, theme, and menu key.";
-	})
-	InfoSection:Paragraph({
-		Title = "Script";
-		Body = "Lumen UI library";
-	})
-
-	local function SetStatus(Text: string)
-		Status.SetBody(Text)
-	end
-
-	ListSection:Button({
-		Name = "Load";
-		Width = 0.5;
-		Callback = function()
-			local Name = CurrentName()
-			if Library.LoadConfig(Name) then
-				Selected.Name = Name
-				SetStatus("Loaded · " .. Name)
-				Meta.SetBody("Autoload: " .. tostring(Library.GetAutoload() == Name) .. "\nTheme & flags applied")
-				Library.Notify({ Title = "Config"; Text = "Loaded " .. Name; Type = "Success" })
-			else
-				SetStatus("Failed to load · " .. Name)
-				Library.Notify({ Title = "Config"; Text = "Failed to load " .. Name; Type = "Error" })
-			end
-		end;
-	})
-	ListSection:Button({
+	ActionsSection:Button({
 		Name = "Save";
 		Width = 0.5;
 		Callback = function()
 			local Name = CurrentName()
 			if Library.SaveConfig(Name) then
-				Selected.Name = Name
-				ReloadList()
-				SetStatus("Saved · " .. Name)
+				SelectConfig(Name)
+				RebuildList()
 				Library.Notify({ Title = "Config"; Text = "Saved " .. Name; Type = "Success" })
 			else
-				SetStatus("Save failed (writefile?)")
 				Library.Notify({ Title = "Config"; Text = "Save failed — executor FS?"; Type = "Error" })
 			end
 		end;
 	})
-	ListSection:Button({
-		Name = "Overwrite";
+	ActionsSection:Button({
+		Name = "Load";
 		Width = 0.5;
 		Callback = function()
 			local Name = CurrentName()
-			if Library.SaveConfig(Name) then
-				ReloadList()
-				SetStatus("Overwritten · " .. Name)
+			if Library.LoadConfig(Name) then
+				Library.ApplyTheme()
+				SelectConfig(Name)
+				Library.Notify({ Title = "Config"; Text = "Loaded " .. Name; Type = "Success" })
+			else
+				Library.Notify({ Title = "Config"; Text = "Failed to load " .. Name; Type = "Error" })
 			end
 		end;
 	})
-	ListSection:Button({
-		Name = "Set autoload";
-		Width = 0.5;
-		Callback = function()
-			local Name = CurrentName()
-			Library.SetAutoload(Name)
-			SetStatus("Autoload · " .. Name)
-			Meta.SetBody("Autoload set to " .. Name)
-		end;
-	})
-	ListSection:Button({
+	ActionsSection:Button({
 		Name = "Delete";
 		Width = 0.5;
 		Callback = function()
 			local Name = CurrentName()
 			Library.DeleteConfig(Name)
-			ReloadList()
-			SetStatus("Deleted · " .. Name)
+			Selected.Name = nil
+			RebuildList()
+			Library.Notify({ Title = "Config"; Text = "Deleted " .. Name; Type = "Info" })
 		end;
 	})
-	ListSection:Button({
-		Name = "Refresh list";
+	ActionsSection:Button({
+		Name = "Refresh";
 		Width = 0.5;
-		Height = 26;
 		Callback = function()
-			ReloadList()
-			SetStatus("List refreshed")
+			RebuildList()
+			Library.Notify({ Title = "Config"; Text = "List refreshed"; Type = "Info"; Duration = 1.5 })
+		end;
+	})
+	ActionsSection:Button({
+		Name = "Set autoload";
+		Callback = function()
+			local Name = CurrentName()
+			Library.SetAutoload(Name)
+			Library.Notify({ Title = "Config"; Text = "Autoload → " .. Name; Type = "Success" })
 		end;
 	})
 
-	local AccentLabel = ThemeSection:Label({ Text = "Accent" })
-	AccentLabel:Colorpicker({
-		Color = Library.Theme.Accent;
-		Flag = "ThemeAccent";
-		Callback = function(Color)
-			Library.Theme.Accent = Color
-			if Library.Watermark.Accent then
-				Library.Watermark.Accent.BackgroundColor3 = Color
-			end
-		end;
+	RebuildList()
+
+	--@ theme colorpickers that actually apply
+	local function ThemePicker(LabelText: string, Key: string)
+		local Row = ThemeSection:Label({ Text = LabelText })
+		Row:Colorpicker({
+			Color = Library.Theme[Key];
+			Flag = "Theme" .. Key;
+			Callback = function(Color)
+				Library.Theme[Key] = Color
+				if Key == "Accent" then
+					--@ derive a darker accent for gradients
+					local H, S, V = Color:ToHSV()
+					Library.Theme.AccentDark = HSV(H, S, math.max(V * 0.55, 0.15))
+				end
+				Library.ApplyTheme()
+			end;
+		})
+	end
+
+	ThemePicker("Accent", "Accent")
+	ThemePicker("Background", "Background")
+	ThemePicker("Surface", "Surface")
+	ThemePicker("Surface alt", "SurfaceAlt")
+	ThemePicker("Border", "Border")
+	ThemePicker("Section border", "SectionBorder")
+	ThemePicker("Text", "Text")
+
+	ThemePrev:Paragraph({
+		Title = "Live theme";
+		Body = "Changes apply immediately to the menu, watermark, and keybind list.";
 	})
-	local BgLabel = ThemeSection:Label({ Text = "Background" })
-	BgLabel:Colorpicker({
-		Color = Library.Theme.Background;
-		Flag = "ThemeBackground";
-		Callback = function(Color)
-			Library.Theme.Background = Color
-		end;
-	})
-	local SurfaceLabel = ThemeSection:Label({ Text = "Surface" })
-	SurfaceLabel:Colorpicker({
-		Color = Library.Theme.Surface;
-		Flag = "ThemeSurface";
-		Callback = function(Color)
-			Library.Theme.Surface = Color
-		end;
-	})
-	local BorderLabel = ThemeSection:Label({ Text = "Border" })
-	BorderLabel:Colorpicker({
-		Color = Library.Theme.Border;
-		Flag = "ThemeBorder";
-		Callback = function(Color)
-			Library.Theme.Border = Color
+	ThemePrev:Button({
+		Name = "Reset theme";
+		Callback = function()
+			Library.Theme.Accent = RGB(138, 156, 229)
+			Library.Theme.AccentDark = RGB(78, 88, 129)
+			Library.Theme.Background = RGB(9, 8, 8)
+			Library.Theme.Surface = RGB(15, 14, 15)
+			Library.Theme.SurfaceAlt = RGB(20, 20, 21)
+			Library.Theme.Border = RGB(36, 37, 37)
+			Library.Theme.SectionBorder = RGB(32, 33, 36)
+			Library.Theme.Text = RGB(255, 255, 255)
+			Library.ApplyTheme()
+			Library.Notify({ Title = "Theme"; Text = "Reset to default"; Type = "Info" })
 		end;
 	})
 
@@ -3373,11 +3598,8 @@ Library.BuildConfigPage = function(self: Library, Window: any)
 		Key = Library.MenuKey;
 		Type = "Toggle";
 		Flag = "MenuKeybind";
-		Callback = function()
-			--@ actual toggle is handled globally; this only stores the key
-		end;
+		Callback = function() end;
 	})
-	--@ keep MenuKey in sync when rebound
 	task.defer(function()
 		local Flag = Library.Flags["MenuKeybind"]
 		if Flag then
@@ -3399,15 +3621,6 @@ Library.BuildConfigPage = function(self: Library, Window: any)
 		Flag = "UIScale";
 		Callback = function(Value)
 			Library.SetScale(Value / 100)
-		end;
-	})
-	MenuSection:Dropdown({
-		Name = "Notification position";
-		Options = { "Top Left", "Top Right", "Bottom Left", "Bottom Right" };
-		Value = Library.NotifyPosition;
-		Flag = "NotifyPosition";
-		Callback = function(Value)
-			Library.NotifyPosition = Value
 		end;
 	})
 	local WM = MenuSection:Label({ Text = "Watermark" })
@@ -3442,13 +3655,35 @@ Library.BuildConfigPage = function(self: Library, Window: any)
 		end;
 	})
 
-	ReloadList()
+	NotifySection:Dropdown({
+		Name = "Position";
+		Options = { "Top Left", "Top Right", "Bottom Left", "Bottom Right" };
+		Value = Library.NotifyPosition;
+		Flag = "NotifyPosition";
+		Callback = function(Value)
+			Library.NotifyPosition = Value
+		end;
+	})
+	local NT = NotifySection:Label({ Text = "Notify on toggles" })
+	NT:Toggle({
+		State = Library.NotifyToggles ~= false;
+		Flag = "NotifyToggles";
+		Callback = function(State)
+			Library.NotifyToggles = State
+		end;
+	})
+	NotifySection:Button({
+		Name = "Test notification";
+		Callback = function()
+			Library.Notify({ Title = "Lumen"; Text = "This is a test notification"; Type = "Success" })
+		end;
+	})
+
 	local Autoload = Library.GetAutoload()
 	if Autoload then
 		Library.LoadConfig(Autoload)
-		Selected.Name = Autoload
-		ConfigInput.Set(Autoload)
-		SetStatus("Autoloaded · " .. Autoload)
+		Library.ApplyTheme()
+		SelectConfig(Autoload)
 	end
 
 	return Page
