@@ -333,13 +333,21 @@ local function ClampToScreen(Object: GuiObject, Position: UDim2): UDim2
 	local GuiService = Services:GetService("GuiService")
 	local Inset = GuiService:GetGuiInset()
 	local Size = Object.AbsoluteSize
+	if Size.X <= 0 or Size.Y <= 0 then
+		Size = Object.AbsoluteSize
+		if Size.X <= 0 then Size = V2(658, 461) end
+	end
 
-	--@ keep at least this many pixels of the window on-screen so it stays grabbable
-	local Edge = 48
-	local MinX = Edge - Size.X
-	local MaxX = Viewport.X - Edge
-	local MinY = Inset.Y
-	local MaxY = Viewport.Y - Edge
+	--@ ScreenGui uses IgnoreGuiInset = false → coords are already below the topbar.
+	--@ Keep the *entire* window on-screen with a small padding.
+	local Pad = 4
+	local UsableW = Viewport.X
+	local UsableH = Viewport.Y - Inset.Y
+
+	local MinX = Pad
+	local MinY = Pad
+	local MaxX = math.max(Pad, UsableW - Size.X - Pad)
+	local MaxY = math.max(Pad, UsableH - Size.Y - Pad)
 
 	local X = MC(Position.X.Offset, MinX, MaxX)
 	local Y = MC(Position.Y.Offset, MinY, MaxY)
@@ -2177,11 +2185,25 @@ Library.Window = function(self: Library, propertyTable: {})
 		if Size.X <= 0 then
 			Size = V2(658, 461)
 		end
+		local GuiService = Services:GetService("GuiService")
+		local Inset = GuiService:GetGuiInset()
 		Canvas.Position = ClampToScreen(Canvas, UFO(
 			math.floor((Viewport.X - Size.X) * 0.5),
-			math.floor((Viewport.Y - Size.Y) * 0.5)
+			math.floor((Viewport.Y - Inset.Y - Size.Y) * 0.5)
 		))
 	end)
+
+	--@ stay fully on-screen if the viewport resizes
+	do
+		local Cam = workspace.CurrentCamera
+		if Cam then
+			Cam:GetPropertyChangedSignal("ViewportSize"):Connect(function()
+				if Canvas and Canvas.Parent then
+					Canvas.Position = ClampToScreen(Canvas, Canvas.Position)
+				end
+			end)
+		end
+	end
 
 	--@ the icon and the padding around the box are part of the bar you'd expect to click
 	Search.InputBegan:Connect(function(Input)
