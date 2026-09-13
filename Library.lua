@@ -327,14 +327,42 @@ local function ResolveIcon(Icon: number | string?): string
 	return "rbxassetid://" .. tostring(Lucide.hash)
 end
 
-local function BindDrag(Object: GuiObject, Handle: GuiObject?)
+local function ClampToScreen(Object: GuiObject, Position: UDim2): UDim2
+	local Camera = workspace.CurrentCamera
+	local Viewport = Camera and Camera.ViewportSize or V2(1920, 1080)
+	local GuiService = Services:GetService("GuiService")
+	local Inset = GuiService:GetGuiInset()
+	local Size = Object.AbsoluteSize
+
+	--@ keep at least this many pixels of the window on-screen so it stays grabbable
+	local Edge = 48
+	local MinX = Edge - Size.X
+	local MaxX = Viewport.X - Edge
+	local MinY = Inset.Y
+	local MaxY = Viewport.Y - Edge
+
+	local X = MC(Position.X.Offset, MinX, MaxX)
+	local Y = MC(Position.Y.Offset, MinY, MaxY)
+
+	return UD2(Position.X.Scale, X, Position.Y.Scale, Y)
+end
+
+local function BindDrag(Object: GuiObject, Handle: GuiObject?, ClampScreen: boolean?)
 	Handle = Handle or Object
+	ClampScreen = ClampScreen == true
 
 	local Dragging = false
 	local DragStart: Vector3
 	local StartPosition: UDim2
 	local CurrentDelta = V2(0, 0)
 	local RenderConn: RBXScriptConnection?
+
+	local function ApplyPosition(Position: UDim2)
+		if ClampScreen then
+			Position = ClampToScreen(Object, Position)
+		end
+		Object.Position = Position
+	end
 
 	local function StopDrag()
 		Dragging = false
@@ -378,7 +406,10 @@ local function BindDrag(Object: GuiObject, Handle: GuiObject?)
 				StartPosition.Y.Scale,
 				StartPosition.Y.Offset + CurrentDelta.Y
 			)
-			Object.Position = Object.Position:Lerp(Target, 0.35)
+			if ClampScreen then
+				Target = ClampToScreen(Object, Target)
+			end
+			Object.Position = Object.Position:Lerp(Target, 0.28)
 		end)
 	end)
 
@@ -393,13 +424,13 @@ local function BindDrag(Object: GuiObject, Handle: GuiObject?)
 	UserInputService.InputEnded:Connect(function(Input)
 		if Input.UserInputType == UIT.MouseButton1 or Input.UserInputType == UIT.Touch then
 			if Dragging then
-				--@ snap to final position without residual lag
-				Object.Position = UD2(
+				--@ snap to final clamped position without residual lag
+				ApplyPosition(UD2(
 					StartPosition.X.Scale,
 					StartPosition.X.Offset + CurrentDelta.X,
 					StartPosition.Y.Scale,
 					StartPosition.Y.Offset + CurrentDelta.Y
-				)
+				))
 				StopDrag()
 			end
 		end
@@ -475,8 +506,10 @@ local SectionDrag = {
 	SourceParent = nil :: Frame?,
 	SourceOrder = 0,
 	TargetParent = nil :: Frame?,
-	TargetOrder = 0,
+	TargetIndex = 0,
 	Offset = V2(0, 0),
+	DragHeight = 60,
+	DragWidth = 200,
 	RenderConn = nil :: RBXScriptConnection?,
 }
 
@@ -488,6 +521,48 @@ local function ClearSectionDragVisuals()
 	if SectionDrag.Placeholder then
 		SectionDrag.Placeholder:Destroy()
 		SectionDrag.Placeholder = nil
+	end
+end
+
+local function ListColumnSections(Column: Frame, Exclude: Frame?): { Frame }
+	local List = {}
+	for _, Child in Column:GetChildren() do
+		if Child:IsA("Frame") and Child.Name == "Section" and Child ~= Exclude then
+			TIS(List, Child)
+		end
+	end
+	table.sort(List, function(a, b)
+		return a.LayoutOrder < b.LayoutOrder
+	end)
+	return List
+end
+
+--@ assign sequential LayoutOrders; placeholder occupies InsertIndex and pushes the rest down
+local function RelayoutColumn(Column: Frame, Placeholder: Frame?, InsertIndex: number, Exclude: Frame?)
+	local Sections = ListColumnSections(Column, Exclude)
+
+	InsertIndex = MC(InsertIndex, 0, #Sections)
+
+	if Placeholder then
+		Placeholder.Parent = Column
+		Placeholder.LayoutOrder = InsertIndex * 2
+		Placeholder.Visible = true
+	end
+
+	for Index, SectionFrame in Sections do
+		--@ sections at/after the insert slot shift down by one visual slot
+		local Slot = Index - 1
+		if Slot >= InsertIndex then
+			Slot += 1
+		end
+		SectionFrame.LayoutOrder = Slot * 2
+	end
+end
+
+local function NormalizeColumnOrders(Column: Frame)
+	local Sections = ListColumnSections(Column, nil)
+	for Index, SectionFrame in Sections do
+		SectionFrame.LayoutOrder = Index - 1
 	end
 end
 
@@ -510,41 +585,50 @@ local function StopSectionDrag(Commit: boolean)
 	end
 
 	local Frame = Section.Frame
+	local TargetColumn = SectionDrag.TargetParent or SectionDrag.SourceParent
+	local InsertIndex = SectionDrag.TargetIndex or 0
 
-	if Commit and SectionDrag.TargetParent then
-		Frame.Parent = SectionDrag.TargetParent
-		Frame.LayoutOrder = SectionDrag.TargetOrder
-		Section.Side = SectionDrag.TargetParent.Name
-		Frame.BackgroundTransparency = 0
+	ClearSectionDragVisuals()
+
+	if Commit and TargetColumn then
+		--@ place into the live slot the placeholder was holding
+		local Sections = ListColumnSections(TargetColumn, Frame)
+		InsertIndex = MC(InsertIndex, 0, #Sections)
+
+		Frame.Parent = TargetColumn
 		Frame.Visible = true
+		Frame.BackgroundTransparency = 0
+		Section.Side = TargetColumn.Name
 
-		local Siblings = {}
-		for _, Child in SectionDrag.TargetParent:GetChildren() do
-			if Child:IsA("Frame") and Child.Name == "Section" and Child ~= Frame then
-				TIS(Siblings, Child)
-			end
-		end
-		table.sort(Siblings, function(a, b)
-			return a.LayoutOrder < b.LayoutOrder
-		end)
-
+		--@ rebuild orders: sections before insert, then frame, then the rest
 		local Order = 0
-		for _, Sibling in Siblings do
-			if Order == SectionDrag.TargetOrder then
+		for Index, Sibling in Sections do
+			if Index - 1 == InsertIndex then
+				Frame.LayoutOrder = Order
 				Order += 1
 			end
 			Sibling.LayoutOrder = Order
 			Order += 1
 		end
-		Frame.LayoutOrder = SectionDrag.TargetOrder
+		if InsertIndex >= #Sections then
+			Frame.LayoutOrder = Order
+		end
+
+		--@ clean the other column if we moved across
+		if SectionDrag.SourceParent and SectionDrag.SourceParent ~= TargetColumn then
+			NormalizeColumnOrders(SectionDrag.SourceParent)
+		end
+		NormalizeColumnOrders(TargetColumn)
 	else
 		Frame.Parent = SectionDrag.SourceParent
 		Frame.LayoutOrder = SectionDrag.SourceOrder
-		Frame.BackgroundTransparency = 0
 		Frame.Visible = true
+		Frame.BackgroundTransparency = 0
+		if SectionDrag.SourceParent then
+			NormalizeColumnOrders(SectionDrag.SourceParent)
+		end
 	end
 
-	ClearSectionDragVisuals()
 	SectionDrag.Section = nil
 	SectionDrag.SourceParent = nil
 	SectionDrag.TargetParent = nil
@@ -564,28 +648,54 @@ local function GetColumnAtPosition(PageFrame: Frame, ScreenPos: Vector2): Frame?
 	return Right :: Frame
 end
 
-local function ComputeInsertOrder(Column: Frame, ScreenY: number, Exclude: Frame?): number
-	local Candidates = {}
-	for _, Child in Column:GetChildren() do
-		if Child:IsA("Frame") and Child.Name == "Section" and Child ~= Exclude and Child.Visible then
-			TIS(Candidates, Child)
-		end
-	end
-	table.sort(Candidates, function(a, b)
-		return a.AbsolutePosition.Y < b.AbsolutePosition.Y
-	end)
+--@ returns 0-based insert index among remaining sections (placeholder slot)
+local function ComputeInsertIndex(Column: Frame, ScreenY: number, Exclude: Frame?): number
+	local Candidates = ListColumnSections(Column, Exclude)
 
-	for _, Child in Candidates do
+	for Index, Child in Candidates do
 		local Mid = Child.AbsolutePosition.Y + Child.AbsoluteSize.Y * 0.5
 		if ScreenY < Mid then
-			return Child.LayoutOrder
+			return Index - 1
 		end
 	end
 
-	if #Candidates > 0 then
-		return Candidates[#Candidates].LayoutOrder + 1
+	return #Candidates
+end
+
+local function EnsurePlaceholder(Height: number): Frame
+	if SectionDrag.Placeholder then
+		return SectionDrag.Placeholder
 	end
-	return 0
+
+	local Placeholder = Add("Frame", {
+		Name = "SectionPlaceholder";
+		BackgroundColor3 = RGB(78, 88, 129);
+		BackgroundTransparency = 0.65;
+		BorderSizePixel = 0;
+		Size = UD2(1, 0, 0, Height);
+		ZIndex = 5;
+	}) :: Frame
+	Add("UICorner", { Parent = Placeholder; CornerRadius = UD(0, 5); })
+	Add("UIStroke", {
+		Parent = Placeholder;
+		ApplyStrokeMode = ASM.Border;
+		Color = RGB(138, 156, 229);
+		Thickness = 1.5;
+		Transparency = 0.15;
+	})
+	--@ inner dashed-feel bar so the gap reads as a full section slot
+	local Inner = Add("Frame", {
+		Parent = Placeholder;
+		BackgroundColor3 = RGB(138, 156, 229);
+		BackgroundTransparency = 0.85;
+		BorderSizePixel = 0;
+		Size = UD2(1, -12, 1, -12);
+		Position = UFO(6, 6);
+	}) :: Frame
+	Add("UICorner", { Parent = Inner; CornerRadius = UD(0, 4); })
+
+	SectionDrag.Placeholder = Placeholder
+	return Placeholder
 end
 
 local function UpdateSectionDrag(MousePos: Vector2)
@@ -610,43 +720,27 @@ local function UpdateSectionDrag(MousePos: Vector2)
 		return
 	end
 
-	local InsertOrder = ComputeInsertOrder(Column, MousePos.Y, Frame)
+	local InsertIndex = ComputeInsertIndex(Column, MousePos.Y, Frame)
 	SectionDrag.TargetParent = Column
-	SectionDrag.TargetOrder = InsertOrder
+	SectionDrag.TargetIndex = InsertIndex
 
-	if not SectionDrag.Placeholder then
-		local Placeholder = Add("Frame", {
-			Name = "SectionPlaceholder";
-			BackgroundColor3 = RGB(78, 88, 129);
-			BackgroundTransparency = 0.55;
-			BorderSizePixel = 0;
-			Size = UFS(1, 0);
-			AutomaticSize = AS.Y;
-			ZIndex = 5;
-		}) :: Frame
-		Add("UICorner", { Parent = Placeholder; CornerRadius = UD(0, 5); })
-		Add("UIStroke", {
-			Parent = Placeholder;
-			ApplyStrokeMode = ASM.Border;
-			Color = RGB(138, 156, 229);
-			Thickness = 1.5;
-			Transparency = 0.25;
-		})
-		local Height = math.max(Frame.AbsoluteSize.Y, 60)
-		Add("Frame", {
-			Parent = Placeholder;
-			BackgroundTransparency = 1;
-			Size = UD2(1, 0, 0, Height);
-		})
-		SectionDrag.Placeholder = Placeholder
-	end
+	local Placeholder = EnsurePlaceholder(SectionDrag.DragHeight)
+	Placeholder.Size = UD2(1, 0, 0, SectionDrag.DragHeight)
 
-	local Placeholder = SectionDrag.Placeholder
-	if Placeholder.Parent ~= Column then
-		Placeholder.Parent = Column
+	--@ live reflow: sections below the slot slide down to open a full-height gap
+	RelayoutColumn(Column, Placeholder, InsertIndex, Frame)
+
+	--@ if we left the other column, normalize it so gaps close
+	local PageLeft = PageFrame:FindFirstChild("Left")
+	local PageRight = PageFrame:FindFirstChild("Right")
+	local Other = if Column == PageLeft then PageRight else PageLeft
+	if Other and Other ~= Column then
+		--@ remove placeholder from the other column if it was there
+		if SectionDrag.Placeholder and SectionDrag.Placeholder.Parent == Other then
+			SectionDrag.Placeholder.Parent = Column
+		end
+		RelayoutColumn(Other :: Frame, nil, 0, Frame)
 	end
-	Placeholder.LayoutOrder = InsertOrder
-	Placeholder.Visible = true
 end
 
 local function BeginSectionDrag(Section: any, Input: InputObject)
@@ -664,37 +758,58 @@ local function BeginSectionDrag(Section: any, Input: InputObject)
 	SectionDrag.SourceParent = Frame.Parent :: Frame
 	SectionDrag.SourceOrder = Frame.LayoutOrder
 	SectionDrag.TargetParent = SectionDrag.SourceParent
-	SectionDrag.TargetOrder = SectionDrag.SourceOrder
+	SectionDrag.TargetIndex = Frame.LayoutOrder
+	SectionDrag.DragHeight = math.max(Frame.AbsoluteSize.Y, 60)
+	SectionDrag.DragWidth = Frame.AbsoluteSize.X
 	SectionDrag.Offset = V2(
 		Input.Position.X - Frame.AbsolutePosition.X,
 		Input.Position.Y - Frame.AbsolutePosition.Y
 	)
 
+	--@ pull out of the column so siblings collapse, then placeholder opens the real gap
 	Frame.Visible = false
+	Frame.Parent = Library._Instance
 
 	local Ghost = Frame:Clone()
 	Ghost.Name = "SectionGhost"
 	Ghost.Parent = Library._Instance
 	Ghost.Visible = true
-	Ghost.BackgroundTransparency = 0.25
-	Ghost.Size = UFO(Frame.AbsoluteSize.X, Frame.AbsoluteSize.Y)
-	Ghost.Position = UFO(Frame.AbsolutePosition.X, Frame.AbsolutePosition.Y)
+	Ghost.BackgroundTransparency = 0.2
+	Ghost.Size = UFO(SectionDrag.DragWidth, SectionDrag.DragHeight)
+	Ghost.Position = UFO(
+		Input.Position.X - SectionDrag.Offset.X,
+		Input.Position.Y - SectionDrag.Offset.Y
+	)
 	Ghost.ZIndex = PopupZ + 5
 	Ghost.AutomaticSize = AS.None
 
 	for _, Desc in Ghost:GetDescendants() do
 		if Desc:IsA("GuiObject") then
 			if Desc:IsA("TextLabel") or Desc:IsA("TextButton") or Desc:IsA("TextBox") then
-				Desc.TextTransparency = math.min(Desc.TextTransparency + 0.35, 0.85)
+				Desc.TextTransparency = math.min(Desc.TextTransparency + 0.3, 0.8)
 			elseif Desc:IsA("ImageLabel") or Desc:IsA("ImageButton") then
-				Desc.ImageTransparency = math.min(Desc.ImageTransparency + 0.35, 0.85)
+				Desc.ImageTransparency = math.min(Desc.ImageTransparency + 0.3, 0.8)
 			elseif Desc:IsA("Frame") and Desc.BackgroundTransparency < 1 then
-				Desc.BackgroundTransparency = math.min(Desc.BackgroundTransparency + 0.2, 0.9)
+				Desc.BackgroundTransparency = math.min(Desc.BackgroundTransparency + 0.15, 0.85)
 			end
 		end
 	end
 
 	SectionDrag.Ghost = Ghost
+
+	--@ seed placeholder in the original slot so layout doesn't jump on first frame
+	local Placeholder = EnsurePlaceholder(SectionDrag.DragHeight)
+	local SourceSections = ListColumnSections(SectionDrag.SourceParent, Frame)
+	local StartIndex = 0
+	for Index, Sibling in SourceSections do
+		if Sibling.LayoutOrder >= SectionDrag.SourceOrder then
+			StartIndex = Index - 1
+			break
+		end
+		StartIndex = Index
+	end
+	SectionDrag.TargetIndex = StartIndex
+	RelayoutColumn(SectionDrag.SourceParent, Placeholder, StartIndex, Frame)
 
 	if SectionDrag.RenderConn then
 		SectionDrag.RenderConn:Disconnect()
@@ -806,7 +921,7 @@ local function SectionBuilder(Container: Frame)
 			TextColor3 = RGB(255, 255, 255);
 			TextSize = 14;
 		})
-		Add("UIStroke", { Parent = SectionFrame; ApplyStrokeMode = ASM.Border; Color = RGB(36, 37, 37); })
+		Add("UIStroke", { Parent = SectionFrame; ApplyStrokeMode = ASM.Border; Color = RGB(72, 73, 78); Thickness = 1; })
 		Add("UIPadding", {
 			Parent = Elements;
 			PaddingBottom = UD(0, 10);
@@ -907,7 +1022,14 @@ local function PageContent(Entry: {}, Container: Frame, Registry: {}, OnOpen: ((
 		end
 
 		Add("UIListLayout", { Parent = Column; Padding = UD(0, 12); SortOrder = SO.LayoutOrder; })
-		Add("UIPadding", { Parent = Column; PaddingRight = UD(0, 6); PaddingBottom = UD(0, 8); })
+		--@ padding so section UIStroke is not clipped on any edge
+		Add("UIPadding", {
+			Parent = Column;
+			PaddingLeft = UD(0, 2);
+			PaddingRight = UD(0, 6);
+			PaddingTop = UD(0, 2);
+			PaddingBottom = UD(0, 8);
+		})
 
 		return Column
 	end
@@ -1687,7 +1809,24 @@ Library.Window = function(self: Library, propertyTable: {})
 	Add("UIPadding", { Parent = Footer; PaddingBottom = UD(0, 10); PaddingLeft = UD(0, 10); PaddingRight = UD(0, 10); PaddingTop = UD(0, 10); }) 
 	Add("TextLabel", { Parent = Footer; AnchorPoint = V2(0, 0.5); AutomaticSize = AS.X; BackgroundColor3 = RGB(255, 255, 255); BackgroundTransparency = 1; BorderColor3 = RGB(0, 0, 0); BorderSizePixel = 0; FontFace = FN("rbxassetid://12187365364", FW.SemiBold, FS.Normal); Position = UFS(0, 0.5); Size = UFO(0, 13); Text = Window.Title; TextColor3 = RGB(255, 255, 255); TextSize = 13; TextTransparency = 0.5; }) 
 	Add("TextLabel", { Parent = Footer; AnchorPoint = V2(1, 0.5); AutomaticSize = AS.X; BackgroundColor3 = RGB(255, 255, 255); BackgroundTransparency = 1; BorderColor3 = RGB(0, 0, 0); BorderSizePixel = 0; FontFace = FN("rbxassetid://12187365364", FW.SemiBold, FS.Normal); Position = UFS(1, 0.5); Size = UFO(0, 13); Text = Window.Footer; TextColor3 = RGB(255, 255, 255); TextSize = 13; TextTransparency = 0.5; }) 
-	BindDrag(Canvas, Header)
+	BindDrag(Canvas, Header, true)
+
+	--@ center window on first open
+	task.defer(function()
+		local Camera = workspace.CurrentCamera
+		if not Camera then
+			return
+		end
+		local Viewport = Camera.ViewportSize
+		local Size = Canvas.AbsoluteSize
+		if Size.X <= 0 then
+			Size = V2(658, 461)
+		end
+		Canvas.Position = ClampToScreen(Canvas, UFO(
+			math.floor((Viewport.X - Size.X) * 0.5),
+			math.floor((Viewport.Y - Size.Y) * 0.5)
+		))
+	end)
 
 	--@ the icon and the padding around the box are part of the bar you'd expect to click
 	Search.InputBegan:Connect(function(Input)
