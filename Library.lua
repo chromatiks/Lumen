@@ -336,20 +336,36 @@ local function ClampToScreen(Object: GuiObject, Position: UDim2): UDim2
 	local Inset = GuiService:GetGuiInset()
 	local Size = Object.AbsoluteSize
 	if Size.X <= 0 or Size.Y <= 0 then
-		Size = Object.AbsoluteSize
-		if Size.X <= 0 then Size = V2(658, 461) end
+		if Size.X <= 0 then Size = V2(280, 200) end
 	end
 
-	--@ ScreenGui uses IgnoreGuiInset = false → coords are already below the topbar.
-	--@ Keep the *entire* window on-screen with a small padding.
-	local Pad = 4
-	local UsableW = Viewport.X
-	local UsableH = Viewport.Y - Inset.Y
+	--@ detect whether the ScreenGui ignores inset (overlay vs main menu)
+	local IgnoresInset = false
+	local Node = Object
+	while Node do
+		if Node:IsA("ScreenGui") then
+			IgnoresInset = Node.IgnoreGuiInset == true
+			break
+		end
+		Node = Node.Parent
+	end
 
+	local Pad = 6
+	local UsableW = Viewport.X
+	local UsableH = Viewport.Y
 	local MinX = Pad
 	local MinY = Pad
-	local MaxX = math.max(Pad, UsableW - Size.X - Pad)
-	local MaxY = math.max(Pad, UsableH - Size.Y - Pad)
+	if IgnoresInset then
+		--@ full screen coords — keep below topbar and inside viewport
+		MinY = Inset.Y + Pad
+		UsableH = Viewport.Y
+	else
+		--@ coords already start below topbar
+		UsableH = Viewport.Y - Inset.Y
+	end
+
+	local MaxX = math.max(MinX, UsableW - Size.X - Pad)
+	local MaxY = math.max(MinY, UsableH - Size.Y - Pad)
 
 	local X = MC(Position.X.Offset, MinX, MaxX)
 	local Y = MC(Position.Y.Offset, MinY, MaxY)
@@ -3203,7 +3219,12 @@ Library.SetKeybindList = function(Enabled: boolean?)
 	Add("UIListLayout", { Parent = Rows; SortOrder = SO.LayoutOrder; Padding = UD(0, 2); })
 
 	--@ drag by header
-	BindDrag(Panel, Header, false)
+	BindDrag(Panel, Header, true)
+	task.defer(function()
+		if Panel and Panel.Parent then
+			Panel.Position = ClampToScreen(Panel, Panel.Position)
+		end
+	end)
 
 	Library.KeybindList.Frame = Panel
 	Library.KeybindList.Body = Body
@@ -3321,6 +3342,7 @@ end
 Library._NotifyOrder = 0
 Library._Toasts = {}
 Library.MaxNotifications = 5
+Library.NotifyToggles = true
 
 Library.Notify = function(propertyTable: {})
 	local Props = Overwrite({
@@ -3384,7 +3406,7 @@ Library.Notify = function(propertyTable: {})
 		Layout.HorizontalAlignment = HFA.Right
 	end
 
-	Library._NotifyOrder = Order + 1
+	Library._NotifyOrder = (Library._NotifyOrder or 0) + 1
 	local Slot = Add("Frame", {
 		Parent = Library._NotifyHost;
 		Size = UD2(1, 0, 0, 0);
