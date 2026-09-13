@@ -123,7 +123,6 @@ Library.SubElements.__index = Library.SubElements
 --@ the screengui sorts siblings by ZIndex, so popups need to outrank the window frame
 local PopupZ = 20
 
-export type Library = setmetatable<{}, typeof(Library)>
 
 --@ dependencies
 cloneref = cloneref or function(...) return ... end
@@ -239,11 +238,9 @@ local function Add(class: string, propertyTable: { [string]: any }?): Instance
 	return _Instance
 end
 
-local function Overwrite<T>(to_overwrite: T, overwrite_with: {}): T
+local function Overwrite(to_overwrite, overwrite_with)
 	for i, v in pairs(overwrite_with) do
-		if v == to_overwrite[i] then
-			continue
-		end
+		if v ~= to_overwrite[i] then
 		--@ only deep-merge when both sides are tables; otherwise replace
 		--@ (fixes Multi dropdown Value = {} overwriting default Value = "")
 		if type(v) == "table" and type(to_overwrite[i]) == "table" then
@@ -252,6 +249,7 @@ local function Overwrite<T>(to_overwrite: T, overwrite_with: {}): T
 			to_overwrite[i] = Overwrite({}, v)
 		else
 			to_overwrite[i] = v
+		end
 		end
 	end
 
@@ -646,7 +644,7 @@ local function RelayoutColumn(Column: Frame, Placeholder: Frame?, InsertIndex: n
 		--@ sections at/after the insert slot shift down by one visual slot
 		local Slot = Index - 1
 		if Slot >= InsertIndex then
-			Slot += 1
+			Slot = Slot + 1
 		end
 		SectionFrame.LayoutOrder = Slot * 2
 	end
@@ -698,10 +696,10 @@ local function StopSectionDrag(Commit: boolean)
 		for Index, Sibling in Sections do
 			if Index - 1 == InsertIndex then
 				Frame.LayoutOrder = Order
-				Order += 1
+				Order = Order + 1
 			end
 			Sibling.LayoutOrder = Order
-			Order += 1
+			Order = Order + 1
 		end
 		if InsertIndex >= #Sections then
 			Frame.LayoutOrder = Order
@@ -1597,7 +1595,7 @@ Library.Elements.Button = function(self: Library, propertyTable: {})
 			self._ButtonRowRemain = 1
 		end
 		ParentFrame = self._ButtonRow
-		self._ButtonRowRemain -= Width
+		self._ButtonRowRemain = self._ButtonRowRemain - Width
 		if self._ButtonRowRemain <= 0.05 then
 			self._ButtonRow = nil
 			self._ButtonRowRemain = 0
@@ -2438,7 +2436,7 @@ Library.ApplyTheme = function()
 	--@ window chrome + tabs
 	for _, Win in Library.Windows do
 		local Canvas = Win.Canvas
-		if not Canvas then continue end
+		if Canvas then
 		Canvas.BackgroundColor3 = T.Background
 		local Header = Canvas:FindFirstChild("Header")
 		if Header then
@@ -2488,6 +2486,7 @@ Library.ApplyTheme = function()
 					end
 				end
 			end
+		end
 		end
 	end
 
@@ -2650,24 +2649,24 @@ Library.LoadConfigData = function(Data: {})
 	if type(Data.Flags) == "table" then
 		for Flag, Packed in Data.Flags do
 			local Entry = Library.Flags[Flag]
-			if not Entry or type(Packed) ~= "table" then
-				continue
-			end
-			local Type = Packed.Type
-			if Type == "Color3" then
-				local Color = DecodeColor(Packed.Color)
-				if Color then
-					Library.SetFlag(Flag, Color, Packed.Transparency)
+			if Entry and type(Packed) == "table" then
+				local Type = Packed.Type
+				if Type == "Color3" then
+					local Color = DecodeColor(Packed.Color)
+					if Color then
+						Library.SetFlag(Flag, Color, Packed.Transparency)
+					end
+				elseif Type == "Enum" and Packed.Name then
+					local EnumRoot = Enum
+					local EnumType = EnumRoot[Packed.EnumType]
+					if EnumType and EnumType[Packed.Name] then
+						Library.SetFlag(Flag, EnumType[Packed.Name])
+					end
+				elseif Type == "table" then
+					Library.SetFlag(Flag, Packed.Value)
+				else
+					Library.SetFlag(Flag, Packed.Value)
 				end
-			elseif Type == "Enum" and Packed.Name then
-				local EnumType = (Enum :: any)[Packed.EnumType]
-				if EnumType and EnumType[Packed.Name] then
-					Library.SetFlag(Flag, EnumType[Packed.Name])
-				end
-			elseif Type == "table" then
-				Library.SetFlag(Flag, Packed.Value)
-			else
-				Library.SetFlag(Flag, Packed.Value)
 			end
 		end
 	end
@@ -3047,7 +3046,7 @@ Library.SetWatermark = function(Text: string?, Enabled: boolean?)
 		if not Library.Watermark.Enabled or not Frame.Parent then
 			return
 		end
-		Frames += 1
+		Frames = Frames + 1
 		local Now = os.clock()
 		if Now - Last >= 1 then
 			FpsL.Text = string.format("%d fps", Frames)
@@ -3374,7 +3373,7 @@ Library.Notify = function(propertyTable: {})
 		Layout.HorizontalAlignment = HFA.Right
 	end
 
-	Library._NotifyOrder += 1
+	Library._NotifyOrder = Order + 1
 	local Slot = Add("Frame", {
 		Parent = Library._NotifyHost;
 		Size = UD2(1, 0, 0, 0);
