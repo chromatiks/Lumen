@@ -3013,14 +3013,11 @@ Library.SetWatermark = function(Text: string?, Enabled: boolean?)
 	end
 
 	local CleanText = tostring(Library.Watermark.Text or "Lumen")
-	--@ drop place ids, bullets, diamonds, pipes
-	CleanText = CleanText
-		:gsub("[
-8r94839483·•▪▫◆◇|]+", " ")
-		:gsub("%s+%d%d%d%d%d+%s*", " ")
-		:gsub("%s+", " ")
-		:gsub("^%s+", "")
-		:gsub("%s+$", "")
+	--@ strip non-ascii noise and trailing numeric ids
+	CleanText = CleanText:gsub("[^%w%s%-%_%.]", " ")
+	CleanText = CleanText:gsub("%s+%d%d%d%d%d+%s*", " ")
+	CleanText = CleanText:gsub("%s+", " ")
+	CleanText = CleanText:gsub("^%s+", ""):gsub("%s+$", "")
 	if CleanText == "" or CleanText:match("^%d+$") then
 		CleanText = "Lumen"
 	end
