@@ -993,7 +993,7 @@ local function SectionBuilder(Container: Frame)
 			TextColor3 = RGB(255, 255, 255);
 			TextSize = 14;
 		})
-		Add("UIStroke", { Parent = SectionFrame; ApplyStrokeMode = ASM.Border; Color = RGB(48, 49, 52); Thickness = 1; })
+		Add("UIStroke", { Parent = SectionFrame; ApplyStrokeMode = ASM.Border; Color = RGB(32, 33, 36); Thickness = 1; })
 		Add("UIPadding", {
 			Parent = Elements;
 			PaddingBottom = UD(0, 10);
@@ -1117,6 +1117,8 @@ local function PageContent(Entry: {}, Container: Frame, Registry: {}, OnOpen: ((
 
 	Entry.Frame = ContentFrame
 	Entry.Section = SectionBuilder(ContentFrame)
+	Library.PageFrames = Library.PageFrames or {}
+	Library.PageFrames[ContentFrame] = Entry
 
 	--@ tracked as a flag rather than read off ContentFrame.Visible, because a page with an
 	--@ active sub page counts as open while its own frame stays hidden
@@ -1240,6 +1242,7 @@ Library.Elements.Dropdown = function(self: Library, propertyTable: {})
 		Options = {},
 		Value = "",
 		Multi = false,
+		Search = false,
 		Callback = print,
 	}, propertyTable or {})
 
@@ -1300,6 +1303,32 @@ Library.Elements.Dropdown = function(self: Library, propertyTable: {})
 		Dropdown.Set(Selected)
 	end
 
+	local SearchBoxDrop = nil
+	if Dropdown.Search then
+		SearchBoxDrop = Add("TextBox", {
+			Parent = OptionList;
+			Name = "SearchBox";
+			BackgroundColor3 = RGB(20, 20, 21);
+			BorderSizePixel = 0;
+			ClearTextOnFocus = false;
+			FontFace = FN("rbxassetid://12187365364", FW.SemiBold, FS.Normal);
+			PlaceholderText = "Search…";
+			PlaceholderColor3 = RGB(255, 255, 255);
+			Text = "";
+			TextColor3 = RGB(255, 255, 255);
+			TextSize = 13;
+			TextTransparency = 0.2;
+			TextXAlignment = TXA.Left;
+			Size = UD2(1, 0, 0, 26);
+			LayoutOrder = -1;
+		})
+		Add("UIPadding", { Parent = SearchBoxDrop; PaddingLeft = UD(0, 10); PaddingRight = UD(0, 10); })
+		Add("UICorner", { Parent = SearchBoxDrop; CornerRadius = UD(0, 5); })
+		SearchBoxDrop:GetPropertyChangedSignal("Text"):Connect(function()
+			Build()
+		end)
+	end
+
 	local function Build()
 		for _, Button in Buttons do
 			Button:Destroy()
@@ -1307,7 +1336,15 @@ Library.Elements.Dropdown = function(self: Library, propertyTable: {})
 
 		table.clear(Buttons)
 
-		for Index, Option in Dropdown.Options do
+		local Filter = SearchBoxDrop and SearchBoxDrop.Text:lower() or ""
+		local VisibleOptions = {}
+		for _, Option in Dropdown.Options do
+			if Filter == "" or tostring(Option):lower():find(Filter, 1, true) then
+				TIS(VisibleOptions, Option)
+			end
+		end
+
+		for Index, Option in VisibleOptions do
 			local Button = Add("TextButton", { Parent = OptionList; Name = Option; AutoButtonColor = false; BackgroundColor3 = RGB(20, 20, 21); BackgroundTransparency = 1; BorderColor3 = RGB(0, 0, 0); BorderSizePixel = 0; FontFace = FN("rbxassetid://12187365364", FW.SemiBold, FS.Normal); LayoutOrder = Index; Size = UD2(1, 0, 0, 22); Text = Option; TextColor3 = RGB(255, 255, 255); TextSize = 13; TextTransparency = 0.5; TextWrapped = true; TextXAlignment = TXA.Left; }) :: TextButton
 			Add("UIPadding", { Parent = Button; PaddingLeft = UD(0, 10); PaddingRight = UD(0, 10); })
 
@@ -1315,7 +1352,7 @@ Library.Elements.Dropdown = function(self: Library, propertyTable: {})
 			--@ rounding themselves or their square corners spill past it. A lone option is
 			--@ both first and last, so it rounds all four.
 			local First = Index == 1
-			local Last = Index == #Dropdown.Options
+			local Last = Index == #VisibleOptions
 
 			Add("UICorner", { Parent = Button;
 				TopLeftRadius = First and UD(0, 5) or UD(0, 0);
@@ -1490,6 +1527,122 @@ Library.Elements.Input = function(self: Library, propertyTable: {})
 	return Input
 end
 
+Library.Elements.Button = function(self: Library, propertyTable: {})
+	local Button = Overwrite({
+		Name = "Button";
+		Callback = print;
+		Color = nil;
+		Height = 28;
+	}, propertyTable or {})
+
+	local Frame = Add("Frame", {
+		Parent = self.Content;
+		Name = "ButtonFrame";
+		BackgroundTransparency = 1;
+		BorderSizePixel = 0;
+		Size = UD2(1, 0, 0, Button.Height);
+	})
+	local Click = Add("TextButton", {
+		Parent = Frame;
+		Name = "Click";
+		AutoButtonColor = false;
+		BackgroundColor3 = RGB(20, 20, 21);
+		BorderSizePixel = 0;
+		FontFace = FN("rbxassetid://12187365364", FW.SemiBold, FS.Normal);
+		Size = UFS(1, 1);
+		Text = Button.Name;
+		TextColor3 = RGB(255, 255, 255);
+		TextSize = 13;
+		TextTransparency = 0.1;
+	})
+	Add("UICorner", { Parent = Click; CornerRadius = UD(0, 5); })
+	Add("UIStroke", { Parent = Click; ApplyStrokeMode = ASM.Border; Color = RGB(36, 37, 37); })
+	local Grad = Add("UIGradient", {
+		Parent = Click;
+		Color = CS{ CSK(0, RGB(78, 88, 129)), CSK(1, RGB(138, 156, 229)) };
+		Rotation = -90;
+		Enabled = false;
+	})
+
+	Click.MouseEnter:Connect(function()
+		Grad.Enabled = true
+		Tween(Click, { BackgroundColor3 = RGB(255, 255, 255); TextColor3 = RGB(0, 0, 0); TextTransparency = 0 }, 0.12)
+	end)
+	Click.MouseLeave:Connect(function()
+		Grad.Enabled = false
+		Tween(Click, { BackgroundColor3 = RGB(20, 20, 21); TextColor3 = RGB(255, 255, 255); TextTransparency = 0.1 }, 0.12)
+	end)
+	Click.Activated:Connect(function()
+		Button.Callback()
+	end)
+
+	Button.SetText = function(Text: string)
+		Button.Name = Text
+		Click.Text = Text
+	end
+	Button.Frame = Frame
+	Button.Click = Click
+
+	TIS(Library.Searchable, { Frame = Frame; Text = Button.Name; Section = self })
+	return Button
+end
+
+Library.Elements.Paragraph = function(self: Library, propertyTable: {})
+	local Paragraph = Overwrite({
+		Title = "";
+		Body = "";
+	}, propertyTable or {})
+
+	local Frame = Add("Frame", {
+		Parent = self.Content;
+		Name = "Paragraph";
+		AutomaticSize = AS.Y;
+		BackgroundTransparency = 1;
+		BorderSizePixel = 0;
+		Size = UFS(1, 0);
+	})
+	if Paragraph.Title ~= "" then
+		Add("TextLabel", {
+			Parent = Frame;
+			BackgroundTransparency = 1;
+			FontFace = FN("rbxassetid://12187365364", FW.SemiBold, FS.Normal);
+			Size = UD2(1, 0, 0, 16);
+			Text = Paragraph.Title;
+			TextColor3 = RGB(255, 255, 255);
+			TextSize = 13;
+			TextTransparency = 0.15;
+			TextXAlignment = TXA.Left;
+		})
+	end
+	local Body = Add("TextLabel", {
+		Parent = Frame;
+		BackgroundTransparency = 1;
+		FontFace = FN("rbxassetid://12187365364", FW.SemiBold, FS.Normal);
+		Position = Paragraph.Title ~= "" and UFO(0, 18) or UFO(0, 0);
+		AutomaticSize = AS.Y;
+		Size = UD2(1, 0, 0, 0);
+		Text = Paragraph.Body;
+		TextColor3 = RGB(255, 255, 255);
+		TextSize = 12;
+		TextTransparency = 0.45;
+		TextWrapped = true;
+		TextXAlignment = TXA.Left;
+		TextYAlignment = TYA.Top;
+	})
+	Paragraph.Frame = Frame
+	Paragraph.SetBody = function(Text: string)
+		Paragraph.Body = Text
+		Body.Text = Text
+	end
+	Paragraph.SetTitle = function(Text: string)
+		Paragraph.Title = Text
+	end
+
+	TIS(Library.Searchable, { Frame = Frame; Text = Paragraph.Title .. " " .. Paragraph.Body; Section = self })
+	return Paragraph
+end
+
+
 --@ sub elements
 Library.SubElements.Toggle = function(self: Library, propertyTable: {})
 	local Toggle = Overwrite({
@@ -1596,6 +1749,8 @@ Library.SubElements.Keybind = function(self: Library, propertyTable: {})
 	Keybind.Set = function(Key: EnumItem?)
 		Keybind.Key = Key
 		KeyButton.Text = Format(Key)
+		local Title = Keybind.Title ~= "" and Keybind.Title or (self.Text or "Keybind")
+		Library.UpdateKeybindList(Title, Format(Key), Keybind.State)
 	end
 
 	Keybind.SetType = function(Type: string)
@@ -1709,6 +1864,8 @@ Library.SubElements.Keybind = function(self: Library, propertyTable: {})
 		end
 
 		Keybind.State = Keybind.Type == "Hold" or not Keybind.State
+		local Title = Keybind.Title ~= "" and Keybind.Title or (self.Text or "Keybind")
+		Library.UpdateKeybindList(Title, Format(Keybind.Key), Keybind.State)
 		Keybind.Callback(Keybind.State)
 	end)
 
@@ -1930,6 +2087,9 @@ Library.Window = function(self: Library, propertyTable: {})
 
 	Window.Canvas = Canvas
 	TIS(Library.Windows, Window)
+	Add("UIScale", { Parent = Canvas; Scale = Library.UIScale })
+	Library.SetWatermark(Library.Watermark.Text, Library.Watermark.Enabled)
+	Library.SetKeybindList(Library.KeybindList.Enabled)
 
 	--@ center window on first open
 	task.defer(function()
@@ -1955,24 +2115,40 @@ Library.Window = function(self: Library, propertyTable: {})
 		end
 	end)
 
-	--@ search hides non matching elements and any section left with nothing in it
+	--@ search across every tab; jump to the page/subpage that owns the first match
 	SearchBox:GetPropertyChangedSignal("Text"):Connect(function()
 		local Query = SearchBox.Text:lower()
 		local Matched = {}
+		local FirstOwner = nil
 
 		for _, Entry in Library.Searchable do
-			--@ plain find, so a query like "fov (" can't blow up as a malformed pattern
 			local Visible = Query == "" or Entry.Text:lower():find(Query, 1, true) ~= nil
-
 			Entry.Frame.Visible = Visible
 
 			if Visible then
 				Matched[Entry.Section] = true
+				if Query ~= "" and not FirstOwner and Entry.Section and Entry.Section.PageFrame then
+					FirstOwner = (Library.PageFrames or {})[Entry.Section.PageFrame]
+				end
 			end
 		end
 
 		for _, Section in Library.Sections do
 			Section.Frame.Visible = Query == "" or Matched[Section] == true
+		end
+
+		if Query ~= "" and FirstOwner then
+			local Owner = FirstOwner
+			if Owner.ParentPage then
+				if not Owner.ParentPage.IsOpen then
+					Owner.ParentPage.Open()
+				end
+				if not Owner.IsOpen then
+					Owner.Open()
+				end
+			elseif not Owner.IsOpen then
+				Owner.Open()
+			end
 		end
 	end)
 
@@ -2046,6 +2222,7 @@ Library.Window = function(self: Library, propertyTable: {})
 
 			SubPage.Button = SubPageButton
 
+			SubPage.ParentPage = Page
 			PageContent(SubPage, Pages, Page.SubPages, function()
 				--@ opening a sub page takes over the content area from the page itself
 				Page.ActiveSubPage = SubPage
@@ -2099,7 +2276,7 @@ Library.Theme = {
 	Surface = RGB(15, 14, 15),
 	SurfaceAlt = RGB(20, 20, 21),
 	Border = RGB(36, 37, 37),
-	SectionBorder = RGB(48, 49, 52),
+	SectionBorder = RGB(32, 33, 36),
 	Text = RGB(255, 255, 255),
 	TextDim = RGB(255, 255, 255),
 }
@@ -2347,20 +2524,16 @@ Library.LoadingScreen = function(self: Library, propertyTable: {})
 		IgnoreGuiInset = true;
 	})
 
-	local Backdrop = Add("Frame", {
-		Parent = Gui;
-		BackgroundColor3 = Library.Theme.Background;
-		BorderSizePixel = 0;
-		Size = UFS(1, 1);
-	})
 	local Card = Add("Frame", {
-		Parent = Backdrop;
+		Parent = Gui;
 		AnchorPoint = V2(0.5, 0.5);
 		Position = UFS(0.5, 0.5);
 		Size = UFO(280, 120);
 		BackgroundColor3 = Library.Theme.Surface;
 		BorderSizePixel = 0;
+		ZIndex = 50;
 	})
+	Add("UIShadow", { Parent = Card; BlurRadius = UD(0, 24); Spread = UFO(6, 6); Transparency = 0.55; })
 	Add("UICorner", { Parent = Card; CornerRadius = UD(0, 8); })
 	Add("UIStroke", { Parent = Card; ApplyStrokeMode = ASM.Border; Color = Library.Theme.Border; })
 	Add("TextLabel", {
@@ -2409,13 +2582,214 @@ Library.LoadingScreen = function(self: Library, propertyTable: {})
 	Tween(Bar, { Size = UD2(1, 0, 1, 0) }, Props.Duration, ES.Quad, ED.Out)
 
 	task.delay(Props.Duration + 0.15, function()
-		Tween(Backdrop, { BackgroundTransparency = 1 }, 0.25)
-		Tween(Card, { BackgroundTransparency = 1 }, 0.25)
-		task.wait(0.3)
+		Tween(Card, { BackgroundTransparency = 1 }, 0.3)
+		task.wait(0.35)
 		Gui:Destroy()
 	end)
 
 	return Gui
+end
+
+Library.UIScale = 1
+
+Library.SetScale = function(Scale: number)
+	Scale = MC(Scale, 0.75, 1.25)
+	Library.UIScale = Scale
+	for _, Win in Library.Windows do
+		if Win.Canvas then
+			local Existing = Win.Canvas:FindFirstChildOfClass("UIScale")
+			if not Existing then
+				Existing = Add("UIScale", { Parent = Win.Canvas })
+			end
+			Existing.Scale = Scale
+		end
+	end
+end
+
+Library.Watermark = {
+	Enabled = true;
+	Text = "Lumen";
+	Frame = nil :: Frame?;
+}
+
+Library.KeybindList = {
+	Enabled = true;
+	Frame = nil :: Frame?;
+	Rows = {} :: { [string]: Frame };
+}
+
+local function EnsureOverlayGui()
+	if Library._Overlay then
+		return Library._Overlay
+	end
+	Library._Overlay = Add("ScreenGui", {
+		Parent = RunService:IsStudio() and Client.PlayerGui or Services:GetService("CoreGui");
+		Name = "LumenOverlay";
+		ZIndexBehavior = ZIB.Sibling;
+		IgnoreGuiInset = true;
+	})
+	return Library._Overlay
+end
+
+Library.SetWatermark = function(Text: string?, Enabled: boolean?)
+	if Enabled ~= nil then
+		Library.Watermark.Enabled = Enabled
+	end
+	if Text ~= nil then
+		Library.Watermark.Text = Text
+	end
+
+	local Gui = EnsureOverlayGui()
+	if not Library.Watermark.Frame then
+		local Frame = Add("Frame", {
+			Parent = Gui;
+			Name = "Watermark";
+			AnchorPoint = V2(0.5, 0);
+			Position = UD2(0.5, 0, 0, 12);
+			AutomaticSize = AS.X;
+			Size = UFO(0, 28);
+			BackgroundColor3 = Library.Theme.Surface;
+			BorderSizePixel = 0;
+			ZIndex = 100;
+		})
+		Add("UICorner", { Parent = Frame; CornerRadius = UD(0, 6); })
+		Add("UIStroke", { Parent = Frame; ApplyStrokeMode = ASM.Border; Color = Library.Theme.Border; })
+		Add("UIPadding", { Parent = Frame; PaddingLeft = UD(0, 12); PaddingRight = UD(0, 12); })
+		Add("UIListLayout", {
+			Parent = Frame;
+			FillDirection = FD.Horizontal;
+			Padding = UD(0, 8);
+			VerticalAlignment = VFA.Center;
+			HorizontalAlignment = HFA.Center;
+		})
+		local Accent = Add("Frame", {
+			Parent = Frame;
+			BackgroundColor3 = Library.Theme.Accent;
+			BorderSizePixel = 0;
+			Size = UFO(3, 14);
+			LayoutOrder = 0;
+		})
+		Add("UICorner", { Parent = Accent; CornerRadius = UD(1, 0); })
+		local Label = Add("TextLabel", {
+			Parent = Frame;
+			Name = "Label";
+			BackgroundTransparency = 1;
+			AutomaticSize = AS.X;
+			Size = UFO(0, 28);
+			FontFace = FN("rbxassetid://12187365364", FW.SemiBold, FS.Normal);
+			Text = Library.Watermark.Text;
+			TextColor3 = Library.Theme.Text;
+			TextSize = 13;
+			LayoutOrder = 1;
+		})
+		Library.Watermark.Frame = Frame
+		Library.Watermark.Label = Label
+		Library.Watermark.Accent = Accent
+	end
+
+	Library.Watermark.Label.Text = Library.Watermark.Text
+	Library.Watermark.Frame.Visible = Library.Watermark.Enabled == true
+end
+
+Library.SetKeybindList = function(Enabled: boolean?)
+	if Enabled ~= nil then
+		Library.KeybindList.Enabled = Enabled
+	end
+
+	local Gui = EnsureOverlayGui()
+	if not Library.KeybindList.Frame then
+		local Frame = Add("Frame", {
+			Parent = Gui;
+			Name = "KeybindList";
+			Position = UFO(12, 12);
+			AutomaticSize = AS.XY;
+			BackgroundColor3 = Library.Theme.Surface;
+			BorderSizePixel = 0;
+			ZIndex = 100;
+		})
+		Add("UICorner", { Parent = Frame; CornerRadius = UD(0, 6); })
+		Add("UIStroke", { Parent = Frame; ApplyStrokeMode = ASM.Border; Color = Library.Theme.Border; })
+		Add("UIPadding", {
+			Parent = Frame;
+			PaddingLeft = UD(0, 10);
+			PaddingRight = UD(0, 10);
+			PaddingTop = UD(0, 8);
+			PaddingBottom = UD(0, 8);
+		})
+		Add("UIListLayout", { Parent = Frame; Padding = UD(0, 4); SortOrder = SO.LayoutOrder; })
+		local Title = Add("TextLabel", {
+			Parent = Frame;
+			BackgroundTransparency = 1;
+			Size = UD2(1, 0, 0, 16);
+			FontFace = FN("rbxassetid://12187365364", FW.SemiBold, FS.Normal);
+			Text = "Keybinds";
+			TextColor3 = Library.Theme.Text;
+			TextTransparency = 0.2;
+			TextSize = 12;
+			TextXAlignment = TXA.Left;
+			LayoutOrder = -1;
+		})
+		Library.KeybindList.Frame = Frame
+		Library.KeybindList.Title = Title
+		Library.KeybindList.Rows = {}
+	end
+
+	Library.KeybindList.Frame.Visible = Library.KeybindList.Enabled == true
+end
+
+Library.UpdateKeybindList = function(Name: string, KeyText: string, Active: boolean?)
+	if not Library.KeybindList.Frame then
+		Library.SetKeybindList(Library.KeybindList.Enabled)
+	end
+	local Rows = Library.KeybindList.Rows
+	local Row = Rows[Name]
+	if not Row then
+		Row = Add("Frame", {
+			Parent = Library.KeybindList.Frame;
+			BackgroundTransparency = 1;
+			Size = UD2(1, 0, 0, 16);
+			AutomaticSize = AS.X;
+		})
+		Add("UIListLayout", {
+			Parent = Row;
+			FillDirection = FD.Horizontal;
+			Padding = UD(0, 12);
+			HorizontalAlignment = HFA.Left;
+		})
+		local N = Add("TextLabel", {
+			Parent = Row;
+			Name = "Name";
+			BackgroundTransparency = 1;
+			AutomaticSize = AS.X;
+			Size = UFO(0, 16);
+			FontFace = FN("rbxassetid://12187365364", FW.SemiBold, FS.Normal);
+			Text = Name;
+			TextColor3 = Library.Theme.Text;
+			TextTransparency = 0.35;
+			TextSize = 12;
+		})
+		local K = Add("TextLabel", {
+			Parent = Row;
+			Name = "Key";
+			BackgroundTransparency = 1;
+			AutomaticSize = AS.X;
+			Size = UFO(0, 16);
+			FontFace = FN("rbxassetid://12187365364", FW.SemiBold, FS.Normal);
+			Text = KeyText;
+			TextColor3 = Library.Theme.Accent;
+			TextSize = 12;
+		})
+		Rows[Name] = Row
+	end
+	local KeyLabel = Row:FindFirstChild("Key")
+	local NameLabel = Row:FindFirstChild("Name")
+	if KeyLabel then
+		KeyLabel.Text = KeyText
+		KeyLabel.TextColor3 = Active and Library.Theme.Accent or RGB(180, 185, 200)
+	end
+	if NameLabel then
+		NameLabel.TextTransparency = Active and 0.1 or 0.35
+	end
 end
 
 Library.ToggleMenu = function(State: boolean?)
@@ -2453,53 +2827,28 @@ Library.BuildConfigPage = function(self: Library, Window: any)
 	local ThemeSection = ThemePage:Section({ Name = "Colors"; Side = "Left"; Icon = "palette" })
 	local MenuSection = ThemePage:Section({ Name = "Menu"; Side = "Right"; Icon = "settings" })
 
-	local Selected = { Name = nil :: string? }
+	local Selected = { Name = "default" }
 
 	local ConfigInput = ListSection:Input({
-		Name = "Name";
+		Name = "Config name";
 		Value = "default";
-		Placeholder = "config name";
+		Placeholder = "name";
 		Flag = "ConfigName";
-		Callback = function() end;
+		Callback = function(Value)
+			Selected.Name = Value
+		end;
 	})
 
-	local function RefreshInfo()
-		--@ info is driven by labels recreated lightly via prints; keep simple text fields
-	end
-
-	local StatusLabel = InfoSection:Label({ Text = "No config selected" })
-	local MetaLabel = InfoSection:Label({ Text = "Save to create a profile" })
-	local ThemeLabel = InfoSection:Label({ Text = "Theme: Lumen default" })
-	local ScriptLabel = InfoSection:Label({ Text = "Script: Lumen UI" })
-
-	local function SelectConfig(Name: string)
-		Selected.Name = Name
-		ConfigInput.Set(Name)
-		StatusLabel.LeftContent:FindFirstChild("Label").Text = "Selected: " .. Name
-		local Autoload = Library.GetAutoload()
-		MetaLabel.LeftContent:FindFirstChild("Label").Text = Autoload == Name and "Autoload: yes" or "Autoload: no"
-		ThemeLabel.LeftContent:FindFirstChild("Label").Text = "Theme: custom"
-		ScriptLabel.LeftContent:FindFirstChild("Label").Text = "Script: Lumen UI"
-	end
-
-	local function SaveSelected()
-		local Name = ConfigInput.Value ~= "" and ConfigInput.Value or "default"
-		if Library.SaveConfig(Name) then
-			SelectConfig(Name)
-			StatusLabel.LeftContent:FindFirstChild("Label").Text = "Saved: " .. Name
-		end
-	end
-
-	local SaveRow = ListSection:Label({ Text = "Save / Load" })
-	--@ use toggles as action stand-ins via callbacks on load buttons pattern - dropdown of configs
 	local ConfigDropdown = ListSection:Dropdown({
 		Name = "Saved configs";
 		Options = Library.ListConfigs();
 		Value = Library.ListConfigs()[1] or "";
+		Search = true;
 		Flag = "ConfigSelected";
 		Callback = function(Value)
 			if Value and Value ~= "" then
-				SelectConfig(Value)
+				Selected.Name = Value
+				ConfigInput.Set(Value)
 			end
 		end;
 	})
@@ -2507,40 +2856,96 @@ Library.BuildConfigPage = function(self: Library, Window: any)
 	local function ReloadList()
 		local Names = Library.ListConfigs()
 		ConfigDropdown.UpdateOptions(Names)
-		if Selected.Name then
+		if Selected.Name and #Names > 0 then
 			ConfigDropdown.Set(Selected.Name)
 		end
 	end
 
-	local Actions = ListSection:Label({ Text = "Actions" })
-	--@ dedicated buttons via Input focus tricks aren't ideal; expose library API in callbacks
-	local LoadToggle = Actions
-	ListSection:Dropdown({
-		Name = "Quick action";
-		Options = { "Load", "Save", "Overwrite", "Set autoload", "Delete", "Refresh list" };
-		Value = "Load";
-		Callback = function(Action)
-			local Name = ConfigInput.Value ~= "" and ConfigInput.Value or Selected.Name or "default"
-			if Action == "Refresh list" then
-				ReloadList()
-			elseif Action == "Save" or Action == "Overwrite" then
-				Library.SaveConfig(Name)
-				ReloadList()
-				SelectConfig(Name)
-			elseif Action == "Load" then
-				if Library.LoadConfig(Name) then
-					SelectConfig(Name)
-					StatusLabel.LeftContent:FindFirstChild("Label").Text = "Loaded: " .. Name
-				end
-			elseif Action == "Set autoload" then
-				Library.SetAutoload(Name)
-				SelectConfig(Name)
-			elseif Action == "Delete" then
-				Library.DeleteConfig(Name)
-				Selected.Name = nil
-				ReloadList()
-				StatusLabel.LeftContent:FindFirstChild("Label").Text = "Deleted: " .. Name
+	local function CurrentName(): string
+		local Name = ConfigInput.Value
+		if not Name or Name == "" then
+			Name = Selected.Name or "default"
+		end
+		return Name
+	end
+
+	local Status = InfoSection:Paragraph({
+		Title = "Status";
+		Body = "No config loaded";
+	})
+	local Meta = InfoSection:Paragraph({
+		Title = "Details";
+		Body = "Save a profile to store flags, theme, and menu key.";
+	})
+	InfoSection:Paragraph({
+		Title = "Script";
+		Body = "Lumen UI library";
+	})
+
+	local function SetStatus(Text: string)
+		Status.SetBody(Text)
+	end
+
+	ListSection:Button({
+		Name = "Load";
+		Callback = function()
+			local Name = CurrentName()
+			if Library.LoadConfig(Name) then
+				Selected.Name = Name
+				SetStatus("Loaded · " .. Name)
+				Meta.SetBody("Autoload: " .. tostring(Library.GetAutoload() == Name) .. "\nTheme & flags applied")
+			else
+				SetStatus("Failed to load · " .. Name)
 			end
+		end;
+	})
+	ListSection:Button({
+		Name = "Save";
+		Callback = function()
+			local Name = CurrentName()
+			if Library.SaveConfig(Name) then
+				Selected.Name = Name
+				ReloadList()
+				SetStatus("Saved · " .. Name)
+			else
+				SetStatus("Save failed (writefile?)")
+			end
+		end;
+	})
+	ListSection:Button({
+		Name = "Overwrite";
+		Callback = function()
+			local Name = CurrentName()
+			if Library.SaveConfig(Name) then
+				ReloadList()
+				SetStatus("Overwritten · " .. Name)
+			end
+		end;
+	})
+	ListSection:Button({
+		Name = "Set autoload";
+		Callback = function()
+			local Name = CurrentName()
+			Library.SetAutoload(Name)
+			SetStatus("Autoload · " .. Name)
+			Meta.SetBody("Autoload set to " .. Name)
+		end;
+	})
+	ListSection:Button({
+		Name = "Delete";
+		Callback = function()
+			local Name = CurrentName()
+			Library.DeleteConfig(Name)
+			ReloadList()
+			SetStatus("Deleted · " .. Name)
+		end;
+	})
+	ListSection:Button({
+		Name = "Refresh list";
+		Height = 26;
+		Callback = function()
+			ReloadList()
+			SetStatus("List refreshed")
 		end;
 	})
 
@@ -2550,6 +2955,9 @@ Library.BuildConfigPage = function(self: Library, Window: any)
 		Flag = "ThemeAccent";
 		Callback = function(Color)
 			Library.Theme.Accent = Color
+			if Library.Watermark.Accent then
+				Library.Watermark.Accent.BackgroundColor3 = Color
+			end
 		end;
 	})
 	local BgLabel = ThemeSection:Label({ Text = "Background" })
@@ -2568,6 +2976,14 @@ Library.BuildConfigPage = function(self: Library, Window: any)
 			Library.Theme.Surface = Color
 		end;
 	})
+	local BorderLabel = ThemeSection:Label({ Text = "Border" })
+	BorderLabel:Colorpicker({
+		Color = Library.Theme.Border;
+		Flag = "ThemeBorder";
+		Callback = function(Color)
+			Library.Theme.Border = Color
+		end;
+	})
 
 	MenuSection:Dropdown({
 		Name = "Menu key";
@@ -2580,14 +2996,38 @@ Library.BuildConfigPage = function(self: Library, Window: any)
 			end
 		end;
 	})
-
-	local Unload = MenuSection:Label({ Text = "Unload menu" })
-	Unload:Toggle({
-		State = false;
+	MenuSection:Slider({
+		Name = "UI scale";
+		Suffix = "%";
+		Value = math.floor(Library.UIScale * 100);
+		Min = 75;
+		Max = 125;
+		Increment = 5;
+		Flag = "UIScale";
+		Callback = function(Value)
+			Library.SetScale(Value / 100)
+		end;
+	})
+	local WM = MenuSection:Label({ Text = "Watermark" })
+	WM:Toggle({
+		State = Library.Watermark.Enabled;
+		Flag = "WatermarkEnabled";
 		Callback = function(State)
-			if State then
-				Library.ToggleMenu(false)
-			end
+			Library.SetWatermark(nil, State)
+		end;
+	})
+	local KBL = MenuSection:Label({ Text = "Keybind list" })
+	KBL:Toggle({
+		State = Library.KeybindList.Enabled;
+		Flag = "KeybindListEnabled";
+		Callback = function(State)
+			Library.SetKeybindList(State)
+		end;
+	})
+	MenuSection:Button({
+		Name = "Hide menu";
+		Callback = function()
+			Library.ToggleMenu(false)
 		end;
 	})
 
@@ -2595,7 +3035,9 @@ Library.BuildConfigPage = function(self: Library, Window: any)
 	local Autoload = Library.GetAutoload()
 	if Autoload then
 		Library.LoadConfig(Autoload)
-		SelectConfig(Autoload)
+		Selected.Name = Autoload
+		ConfigInput.Set(Autoload)
+		SetStatus("Autoloaded · " .. Autoload)
 	end
 
 	return Page
