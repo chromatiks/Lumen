@@ -2923,13 +2923,23 @@ Library.SetWatermark = function(Text: string?, Enabled: boolean?)
 
 	local Title = Chip(Library.Watermark.Text or "Lumen", 1, false)
 	Dot(2)
-	local Place = Chip(game.PlaceName or "Game", 3, true)
+	local Place = Chip(tostring(game.PlaceId), 3, true)
 	Dot(4)
 	local FpsL = Chip("0 fps", 5, true)
 	Dot(6)
 	local PingL = Chip("0 ms", 7, true)
 	Dot(8)
 	local TimeL = Chip(os.date("%H:%M:%S"), 9, true)
+
+	--@ resolve place name async so watermark still builds if Marketplace yields/fails
+	task.spawn(function()
+		local Ok, Info = pcall(function()
+			return game:GetService("MarketplaceService"):GetProductInfo(game.PlaceId)
+		end)
+		if Ok and Info and Info.Name and Place and Place.Parent then
+			Place.Text = Info.Name
+		end
+	end)
 
 	Library.Watermark.Frame = Frame
 	Library.Watermark.Label = Title
