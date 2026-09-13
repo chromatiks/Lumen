@@ -241,10 +241,90 @@ local function Overwrite<T>(to_overwrite: T, overwrite_with: {}): T
 		if v == to_overwrite[i] then
 			continue
 		end
-		to_overwrite[i] = type(v) == "table" and Overwrite(to_overwrite[i] or {}, v) or v
+		--@ only deep-merge when both sides are tables; otherwise replace
+		--@ (fixes Multi dropdown Value = {} overwriting default Value = "")
+		if type(v) == "table" and type(to_overwrite[i]) == "table" then
+			Overwrite(to_overwrite[i], v)
+		elseif type(v) == "table" then
+			to_overwrite[i] = Overwrite({}, v)
+		else
+			to_overwrite[i] = v
+		end
 	end
 
 	return to_overwrite
+end
+
+--@ lucide name → rbxassetid (from public lucide-roblox icon packs)
+local Lucide = {
+	activity = 10709752035,
+	aperture = 10709761813,
+	bell = 10709775704,
+	box = 10709782497,
+	circle = 10709798174,
+	cloud = 10709806740,
+	cog = 10709810948,
+	cpu = 10709813383,
+	crosshair = 10709818534,
+	eye = 10723346959,
+	file = 10723374641,
+	flame = 10723376114,
+	folder = 10723387563,
+	gamepad = 10723395457,
+	grid = 10723404936,
+	hash = 10723405975,
+	heart = 10723406885,
+	["help-circle"] = 10723406988,
+	home = 10723407389,
+	info = 10723415903,
+	key = 10723416652,
+	layers = 10723424505,
+	list = 10723433811,
+	lock = 10723434711,
+	menu = 10734887784,
+	["message-square"] = 10734888228,
+	moon = 10734897102,
+	["mouse-pointer"] = 10734898476,
+	move = 10734900011,
+	palette = 10734910430,
+	save = 10734941499,
+	scan = 10734942565,
+	search = 10734943674,
+	settings = 10734950309,
+	shield = 10734951847,
+	sliders = 10734963400,
+	star = 10734966248,
+	sun = 10734974297,
+	sword = 10734975486,
+	swords = 10734975692,
+	target = 10734977012,
+	terminal = 10734982144,
+	zap = 10734975486,
+	sparkles = 10734966248,
+	user = 10747373176,
+	users = 10747373426,
+	wifi = 10747382504,
+	wrench = 10747383470,
+}
+
+local function ResolveIcon(Icon: number | string?): string
+	if Icon == nil then
+		return "rbxassetid://" .. tostring(Lucide.hash)
+	end
+	if type(Icon) == "number" then
+		return "rbxassetid://" .. tostring(Icon)
+	end
+	local AsString = tostring(Icon)
+	if AsString:match("^rbxasset") then
+		return AsString
+	end
+	--@ accept "lucide:eye", "Lucide:eye", or plain "eye"
+	local Name = AsString:lower():gsub("^lucide:", "")
+	local Id = Lucide[Name] or tonumber(AsString)
+	if Id then
+		return "rbxassetid://" .. tostring(Id)
+	end
+	return "rbxassetid://" .. tostring(Lucide.hash)
 end
 
 local function BindDrag(Object: GuiObject, Handle: GuiObject?)
@@ -649,7 +729,7 @@ local function SectionBuilder(Container: Frame)
 	return function(self: Library, propertyTable: {})
 		local Section = Overwrite({
 			Name = "",
-			Icon = 107651426482528,
+			Icon = "hash",
 			Side = "Left",
 		}, propertyTable or {})
 		setmetatable(Section, { __index = Library.Elements })
@@ -700,7 +780,7 @@ local function SectionBuilder(Container: Frame)
 			BackgroundTransparency = 1;
 			BorderColor3 = RGB(0, 0, 0);
 			BorderSizePixel = 0;
-			Image = "rbxassetid://" .. tostring(Section.Icon);
+			Image = ResolveIcon(Section.Icon);
 			Position = UFS(0, 0.5);
 			Size = UFO(16, 16);
 		})
@@ -812,9 +892,9 @@ local function PageContent(Entry: {}, Container: Frame, Registry: {}, OnOpen: ((
 			BackgroundTransparency = 1;
 			BorderColor3 = RGB(0, 0, 0);
 			BorderSizePixel = 0;
-			ScrollBarThickness = 3;
+			ScrollBarThickness = 0;
 			ScrollBarImageColor3 = RGB(78, 88, 129);
-			ScrollBarImageTransparency = 0.35;
+			ScrollBarImageTransparency = 1;
 			ScrollingDirection = SBD.Y;
 			CanvasSize = UD2(0, 0, 0, 0);
 			AutomaticCanvasSize = AS.Y;
@@ -1641,7 +1721,7 @@ Library.Window = function(self: Library, propertyTable: {})
 	Window.Pages = {}
 	Window.Page = function(self: Library, propertyTable: {})
 		local Page = Overwrite({
-			Icon = 89784578844770
+			Icon = "box"
 		}, propertyTable or {})
 
 		Page.SubPages = {}
@@ -1651,7 +1731,7 @@ Library.Window = function(self: Library, propertyTable: {})
 		local PageButton = Add("TextButton", { Parent = PageButtons; Name = "PageButton"; AutoButtonColor = false; BackgroundColor3 = RGB(255, 255, 255); BackgroundTransparency = 1; BorderColor3 = RGB(0, 0, 0); BorderSizePixel = 0; FontFace = FN("rbxasset://fonts/families/SourceSansPro.json", FW.Regular, FS.Normal); Size = UFO(45, 45); Text = ""; TextColor3 = RGB(0, 0, 0); TextSize = 14; }) :: TextButton
 		Add("UICorner", { Parent = PageButton; CornerRadius = UD(1, 0); })
 		Add("UIGradient", { Parent = PageButton; Color = CS{ CSK(0, RGB(81, 91, 129)), CSK(1, RGB(127, 142, 202)) }; Rotation = -70; })
-		local PageIcon = Add("ImageLabel", { Parent = PageButton; BackgroundColor3 = RGB(255, 255, 255); BackgroundTransparency = 1; BorderColor3 = RGB(0, 0, 0); BorderSizePixel = 0; Image = "rbxassetid://" .. tostring(Page.Icon); ImageTransparency = 0.5; ResampleMode = Enum.ResamplerMode.Pixelated; Size = UFS(1, 1); }) :: ImageLabel
+		local PageIcon = Add("ImageLabel", { Parent = PageButton; BackgroundColor3 = RGB(255, 255, 255); BackgroundTransparency = 1; BorderColor3 = RGB(0, 0, 0); BorderSizePixel = 0; Image = ResolveIcon(Page.Icon); ImageTransparency = 0.5; ResampleMode = Enum.ResamplerMode.Pixelated; Size = UFS(1, 1); }) :: ImageLabel
 		Add("UIPadding", { Parent = PageButton; PaddingBottom = UD(0, 12); PaddingLeft = UD(0, 12); PaddingRight = UD(0, 12); PaddingTop = UD(0, 12); })
 
 		--@ a page's own trigger styling, layered on top of the shared frame/slide/Section
