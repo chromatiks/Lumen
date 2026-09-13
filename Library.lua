@@ -347,7 +347,7 @@ local function ClampToScreen(Object: GuiObject, Position: UDim2): UDim2
 	return UD2(Position.X.Scale, X, Position.Y.Scale, Y)
 end
 
-local function BindDrag(Object: GuiObject, Handle: GuiObject?, ClampScreen: boolean?)
+local function BindDrag(Object: GuiObject, Handle: GuiObject?, ClampScreen: boolean?, IgnoreUnder: GuiObject?)
 	Handle = Handle or Object
 	ClampScreen = ClampScreen == true
 
@@ -372,8 +372,31 @@ local function BindDrag(Object: GuiObject, Handle: GuiObject?, ClampScreen: bool
 		end
 	end
 
+	local function IsIgnored(Input: InputObject): boolean
+		if not IgnoreUnder then
+			return false
+		end
+		local Pos = Input.Position
+		local Objects = Client.PlayerGui:GetGuiObjectsAtPosition(Pos.X, Pos.Y)
+		--@ also check CoreGui path via absolute bounds of IgnoreUnder
+		local Abs = IgnoreUnder.AbsolutePosition
+		local Size = IgnoreUnder.AbsoluteSize
+		if Pos.X >= Abs.X and Pos.X <= Abs.X + Size.X and Pos.Y >= Abs.Y and Pos.Y <= Abs.Y + Size.Y then
+			return true
+		end
+		for _, Gui in Objects do
+			if Gui == IgnoreUnder or Gui:IsDescendantOf(IgnoreUnder) then
+				return true
+			end
+		end
+		return false
+	end
+
 	Handle.InputBegan:Connect(function(Input)
 		if Input.UserInputType ~= UIT.MouseButton1 and Input.UserInputType ~= UIT.Touch then
+			return
+		end
+		if IsIgnored(Input) then
 			return
 		end
 
@@ -381,6 +404,10 @@ local function BindDrag(Object: GuiObject, Handle: GuiObject?, ClampScreen: bool
 		DragStart = Input.Position
 		StartPosition = Object.Position
 		CurrentDelta = V2(0, 0)
+
+		if ClampScreen and Library.OpenPopup and Library.OpenPopup.Close then
+			Library.OpenPopup.Close()
+		end
 
 		local Connection
 		Connection = Input.Changed:Connect(function()
@@ -409,7 +436,7 @@ local function BindDrag(Object: GuiObject, Handle: GuiObject?, ClampScreen: bool
 			if ClampScreen then
 				Target = ClampToScreen(Object, Target)
 			end
-			Object.Position = Object.Position:Lerp(Target, 0.28)
+			Object.Position = Object.Position:Lerp(Target, 0.55)
 		end)
 	end)
 
@@ -496,6 +523,61 @@ local function ReleasePopup(Element: {})
 		Library.OpenPopup = nil
 	end
 end
+
+--@ click outside / drag menu closes open popups (colorpicker, keybind, dropdown)
+UserInputService.InputBegan:Connect(function(Input, GameProcessed)
+	if not Library.OpenPopup then
+		return
+	end
+	if Input.UserInputType ~= UIT.MouseButton1 and Input.UserInputType ~= UIT.Touch then
+		return
+	end
+
+	local Popup = Library.OpenPopup
+	local Pos = Input.Position
+
+	local function Inside(Gui: GuiObject?): boolean
+		if not Gui or not Gui.Visible then
+			return false
+		end
+		local A = Gui.AbsolutePosition
+		local S = Gui.AbsoluteSize
+		return Pos.X >= A.X and Pos.X <= A.X + S.X and Pos.Y >= A.Y and Pos.Y <= A.Y + S.Y
+	end
+
+	--@ find a likely root frame on the popup element
+	local Root = Popup.Frame or Popup._Frame
+	if not Root then
+		for _, Name in { "ColorpickerFrame", "Popup", "Options" } do
+			local Child = Library._Instance:FindFirstChild(Name)
+			if Child and Child.Visible then
+				Root = Child
+				break
+			end
+		end
+	end
+
+	--@ allow clicks on the popup itself
+	if Root and Inside(Root) then
+		return
+	end
+
+	--@ allow the opener button (color swatch / settings gear / dropdown)
+	if Popup.Button and Inside(Popup.Button) then
+		return
+	end
+	if Popup.Settings and Inside(Popup.Settings) then
+		return
+	end
+
+	if Popup.Close then
+		Popup.Close()
+	elseif Popup.Toggle then
+		Popup.Toggle(false)
+	elseif Popup.Open then
+		Popup.Open(false)
+	end
+end)
 
 --@ section drag state
 local SectionDrag = {
@@ -681,18 +763,8 @@ local function EnsurePlaceholder(Height: number): Frame
 		ApplyStrokeMode = ASM.Border;
 		Color = RGB(138, 156, 229);
 		Thickness = 1.5;
-		Transparency = 0.15;
+		Transparency = 0.2;
 	})
-	--@ inner dashed-feel bar so the gap reads as a full section slot
-	local Inner = Add("Frame", {
-		Parent = Placeholder;
-		BackgroundColor3 = RGB(138, 156, 229);
-		BackgroundTransparency = 0.85;
-		BorderSizePixel = 0;
-		Size = UD2(1, -12, 1, -12);
-		Position = UFO(6, 6);
-	}) :: Frame
-	Add("UICorner", { Parent = Inner; CornerRadius = UD(0, 4); })
 
 	SectionDrag.Placeholder = Placeholder
 	return Placeholder
@@ -921,7 +993,7 @@ local function SectionBuilder(Container: Frame)
 			TextColor3 = RGB(255, 255, 255);
 			TextSize = 14;
 		})
-		Add("UIStroke", { Parent = SectionFrame; ApplyStrokeMode = ASM.Border; Color = RGB(72, 73, 78); Thickness = 1; })
+		Add("UIStroke", { Parent = SectionFrame; ApplyStrokeMode = ASM.Border; Color = RGB(48, 49, 52); Thickness = 1; })
 		Add("UIPadding", {
 			Parent = Elements;
 			PaddingBottom = UD(0, 10);
@@ -1153,6 +1225,11 @@ Library.Elements.Slider = function(self: Library, propertyTable: {})
 
 	TIS(Library.Searchable, { Frame = SliderFrame; Text = Slider.Name; Section = self })
 
+	if propertyTable and propertyTable.Flag then
+		Slider.Flag = propertyTable.Flag
+		Library.RegisterFlag(Slider.Flag, { Value = Slider.Value; Set = Slider.Set })
+	end
+
 	Slider.Set(Slider.Value)
 	return Slider
 end
@@ -1351,6 +1428,11 @@ Library.Elements.Dropdown = function(self: Library, propertyTable: {})
 
 	Build()
 
+	if propertyTable and propertyTable.Flag then
+		Dropdown.Flag = propertyTable.Flag
+		Library.RegisterFlag(Dropdown.Flag, { Value = Dropdown.Value; Set = Dropdown.Set })
+	end
+
 	if Dropdown.Multi then
 		--@ nothing is preselected, unlike a single dropdown which always holds a value
 		Dropdown.Set(type(Dropdown.Value) == "table" and Dropdown.Value or {})
@@ -1399,6 +1481,11 @@ Library.Elements.Input = function(self: Library, propertyTable: {})
 		Box:CaptureFocus()
 	end)
 
+	if propertyTable and propertyTable.Flag then
+		Input.Flag = propertyTable.Flag
+		Library.RegisterFlag(Input.Flag, { Value = Input.Value; Set = Input.Set })
+	end
+
 	TIS(Library.Searchable, { Frame = TextBox; Text = Input.Name; Section = self })
 	return Input
 end
@@ -1425,7 +1512,18 @@ Library.SubElements.Toggle = function(self: Library, propertyTable: {})
 		Tween(Overlay, { BackgroundTransparency = state and 0 or 1 }, 0.1)
 		Tween(Indicator, { Position = state and UD2(1, -3, 0.5, 0) or UD2(0, 3, 0.5, 0), AnchorPoint = state and V2(1, 0.5) or V2(0, 0.5)}, 0.1)
 
+		if Toggle.Flag then
+			Library.Flags[Toggle.Flag] = Library.Flags[Toggle.Flag] or {}
+			Library.Flags[Toggle.Flag].Value = state
+			Library.Flags[Toggle.Flag].Set = Toggle.Set
+		end
+
 		Toggle.Callback(state)
+	end
+
+	if propertyTable and propertyTable.Flag then
+		Toggle.Flag = propertyTable.Flag
+		Library.RegisterFlag(Toggle.Flag, { Value = Toggle.State; Set = Toggle.Set })
 	end
 
 	Button.Activated:Connect(function()
@@ -1445,8 +1543,10 @@ Library.SubElements.Keybind = function(self: Library, propertyTable: {})
 	}, propertyTable or {})
 
 	local Settings = Add("ImageButton", { Parent = self.RightContent; Name = "Settings"; AutoButtonColor = false; BackgroundColor3 = RGB(255, 255, 255); BackgroundTransparency = 1; BorderColor3 = RGB(0, 0, 0); BorderSizePixel = 0; Image = "rbxassetid://132030186847627"; ImageTransparency = 0.5; ResampleMode = Enum.ResamplerMode.Pixelated; Size = UFO(15, 15); }) :: ImageButton
+	Keybind.Settings = Settings
 
 	local Popup = Add("Frame", { Parent = Library._Instance; Name = "Popup"; Active = true; BackgroundColor3 = RGB(9, 8, 8); BorderColor3 = RGB(0, 0, 0); BorderSizePixel = 0; Position = UFS(0.3753760755062103, 0.30920326709747314); Size = UFO(180, 119); Visible = false; ZIndex = PopupZ; }) :: Frame
+	Keybind.Frame = Popup
 	--@ buttons are the only thing that reliably swallows a click. Created first so it sits
 	--@ under the contents, and scale sized so it stays out of the AutomaticSize maths
 	Add("TextButton", { Parent = Popup; Name = "Catcher"; AutoButtonColor = false; BackgroundTransparency = 1; BorderSizePixel = 0; Size = UFS(1, 1); Text = ""; })
@@ -1624,6 +1724,11 @@ Library.SubElements.Keybind = function(self: Library, propertyTable: {})
 
 	BindDrag(Popup, Header)
 
+	if propertyTable and propertyTable.Flag then
+		Keybind.Flag = propertyTable.Flag
+		Library.RegisterFlag(Keybind.Flag, { Value = Keybind.Key; Set = Keybind.Set })
+	end
+
 	Keybind.SetType(Keybind.Type)
 	Keybind.Set(Keybind.Key)
 	return Keybind
@@ -1643,7 +1748,10 @@ Library.SubElements.Colorpicker = function(self: Library, propertyTable: {})
 	Add("UICorner", { Parent = Button; CornerRadius = UD(0, 7); })
 	Add("UIGradient", { Parent = Button; Color = CS{ CSK(0, RGB(163, 163, 163)), CSK(1, RGB(255, 255, 255)) }; Rotation = -90; })
 
+	Colorpicker.Button = Button
+
 	local ColorpickerFrame = Add("Frame", { Parent = Library._Instance; Name = "ColorpickerFrame"; Active = true; AutomaticSize = AS.Y; BackgroundColor3 = RGB(9, 8, 8); BorderColor3 = RGB(0, 0, 0); BorderSizePixel = 0; Position = UFS(0.3759043514728546, 0.058557264506816864); Size = UFO(199, 0); Visible = false; ZIndex = PopupZ; }) :: Frame
+	Colorpicker.Frame = ColorpickerFrame
 	--@ buttons are the only thing that reliably swallows a click. Created first so it sits
 	--@ under the contents, and scale sized so it stays out of the AutomaticSize maths
 	Add("TextButton", { Parent = ColorpickerFrame; Name = "Catcher"; AutoButtonColor = false; BackgroundTransparency = 1; BorderSizePixel = 0; Size = UFS(1, 1); Text = ""; })
@@ -1763,6 +1871,15 @@ Library.SubElements.Colorpicker = function(self: Library, propertyTable: {})
 
 	BindDrag(ColorpickerFrame, Header)
 
+	if propertyTable and propertyTable.Flag then
+		Colorpicker.Flag = propertyTable.Flag
+		Library.RegisterFlag(Colorpicker.Flag, {
+			Value = Colorpicker.Color;
+			Transparency = Colorpicker.Transparency;
+			Set = Colorpicker.Set;
+		})
+	end
+
 	Colorpicker.Set(Colorpicker.Color, Colorpicker.Transparency)
 	return Colorpicker
 end
@@ -1786,7 +1903,7 @@ Library.Window = function(self: Library, propertyTable: {})
 	local SubPages = Add("Frame", { Parent = Header; Name = "SubPages"; AutomaticSize = AS.X; BackgroundColor3 = RGB(255, 255, 255); BackgroundTransparency = 1; BorderColor3 = RGB(0, 0, 0); BorderSizePixel = 0; Size = UFS(0, 1); }) :: Frame 
 	local Search = Add("Frame", { Parent = Header; Name = "Search"; LayoutOrder = 1; Active = true; AnchorPoint = V2(1, 0); AutomaticSize = AS.X; BackgroundColor3 = RGB(9, 8, 8); BorderColor3 = RGB(0, 0, 0); BorderSizePixel = 0; Position = UFS(1, 0); Selectable = true; Size = UD2(0, 200, 1, 0); }) :: Frame 
 	local Pages = Add("Frame", { Parent = Canvas; Name = "Pages"; BackgroundColor3 = RGB(255, 255, 255); BackgroundTransparency = 1; BorderColor3 = RGB(0, 0, 0); BorderSizePixel = 0; Position = UFO(75, 50); Size = UD2(1, -75, 1, -75); }) :: Frame 
-	local Footer = Add("Frame", { Parent = Canvas; Name = "Footer"; AnchorPoint = V2(0, 1); BackgroundColor3 = RGB(20, 20, 21); BorderColor3 = RGB(0, 0, 0); BorderSizePixel = 0; Position = UD2(0, 76, 1, 0); Size = UD2(1, -76, 0, 25); }) :: Frame 
+	local Footer = Add("Frame", { Parent = Canvas; Name = "Footer"; AnchorPoint = V2(0, 1); BackgroundColor3 = RGB(15, 14, 15); BorderColor3 = RGB(0, 0, 0); BorderSizePixel = 0; Position = UD2(0, 76, 1, 0); Size = UD2(1, -76, 0, 25); }) :: Frame 
 	local SearchBox = Add("TextBox", { Parent = Search; Name = "TextLabel"; Active = false; AutomaticSize = AS.X; ClearTextOnFocus = false; LayoutOrder = 1; BackgroundColor3 = RGB(255, 255, 255); BackgroundTransparency = 1; BorderColor3 = RGB(0, 0, 0); BorderSizePixel = 0; FontFace = FN("rbxassetid://12187365364", FW.SemiBold, FS.Normal); PlaceholderColor3 = RGB(255, 255, 255); PlaceholderText = "Search function"; Selectable = false; Size = UFS(0, 1); Text = ""; TextColor3 = RGB(255, 255, 255); TextSize = 14; TextTransparency = 0.5; }) :: TextBox
 	Add("UIStroke", { Parent = Canvas; ApplyStrokeMode = ASM.Border; Color = RGB(36, 37, 37); }) 
 	Add("UICorner", { Parent = Canvas; CornerRadius = UD(0, 5); }) 
@@ -1809,7 +1926,10 @@ Library.Window = function(self: Library, propertyTable: {})
 	Add("UIPadding", { Parent = Footer; PaddingBottom = UD(0, 10); PaddingLeft = UD(0, 10); PaddingRight = UD(0, 10); PaddingTop = UD(0, 10); }) 
 	Add("TextLabel", { Parent = Footer; AnchorPoint = V2(0, 0.5); AutomaticSize = AS.X; BackgroundColor3 = RGB(255, 255, 255); BackgroundTransparency = 1; BorderColor3 = RGB(0, 0, 0); BorderSizePixel = 0; FontFace = FN("rbxassetid://12187365364", FW.SemiBold, FS.Normal); Position = UFS(0, 0.5); Size = UFO(0, 13); Text = Window.Title; TextColor3 = RGB(255, 255, 255); TextSize = 13; TextTransparency = 0.5; }) 
 	Add("TextLabel", { Parent = Footer; AnchorPoint = V2(1, 0.5); AutomaticSize = AS.X; BackgroundColor3 = RGB(255, 255, 255); BackgroundTransparency = 1; BorderColor3 = RGB(0, 0, 0); BorderSizePixel = 0; FontFace = FN("rbxassetid://12187365364", FW.SemiBold, FS.Normal); Position = UFS(1, 0.5); Size = UFO(0, 13); Text = Window.Footer; TextColor3 = RGB(255, 255, 255); TextSize = 13; TextTransparency = 0.5; }) 
-	BindDrag(Canvas, Header, true)
+	BindDrag(Canvas, Header, true, Search)
+
+	Window.Canvas = Canvas
+	TIS(Library.Windows, Window)
 
 	--@ center window on first open
 	task.defer(function()
@@ -1970,5 +2090,516 @@ Library.Window = function(self: Library, propertyTable: {})
 	return Window
 end
 
---@ ending
+
+--@ ending · theme / config / menu / loading
+Library.Theme = {
+	Accent = RGB(138, 156, 229),
+	AccentDark = RGB(78, 88, 129),
+	Background = RGB(9, 8, 8),
+	Surface = RGB(15, 14, 15),
+	SurfaceAlt = RGB(20, 20, 21),
+	Border = RGB(36, 37, 37),
+	SectionBorder = RGB(48, 49, 52),
+	Text = RGB(255, 255, 255),
+	TextDim = RGB(255, 255, 255),
+}
+
+Library.Folder = "Lumen"
+Library.ConfigExtension = ".json"
+Library.Autoload = nil
+Library.MenuKey = EKC.LeftAlt
+Library.MenuOpen = true
+Library.Windows = {}
+
+local function EnsureFolder()
+	if isfolder and not isfolder(Library.Folder) then
+		makefolder(Library.Folder)
+	end
+end
+
+local function ConfigPath(Name: string): string
+	return Library.Folder .. "/" .. Name .. Library.ConfigExtension
+end
+
+local function EncodeColor(Color: Color3): { number }
+	return { MR(Color.R * 255), MR(Color.G * 255), MR(Color.B * 255) }
+end
+
+local function DecodeColor(Value: any): Color3?
+	if typeof(Value) == "Color3" then
+		return Value
+	end
+	if type(Value) == "table" and #Value >= 3 then
+		return RGB(Value[1], Value[2], Value[3])
+	end
+	return nil
+end
+
+Library.GetConfig = function()
+	local Data = {
+		Flags = {};
+		Theme = {};
+		MenuKey = Library.MenuKey and Library.MenuKey.Name or "LeftAlt";
+		Version = 1;
+	}
+
+	for Flag, Entry in Library.Flags do
+		local Value = Entry.Value
+		if typeof(Value) == "Color3" then
+			Data.Flags[Flag] = {
+				Type = "Color3";
+				Color = EncodeColor(Value);
+				Transparency = Entry.Transparency or 0;
+			}
+		elseif typeof(Value) == "EnumItem" then
+			Data.Flags[Flag] = { Type = "Enum"; EnumType = tostring(Value.EnumType); Name = Value.Name }
+		elseif type(Value) == "table" then
+			Data.Flags[Flag] = { Type = "table"; Value = Value }
+		else
+			Data.Flags[Flag] = { Type = type(Value); Value = Value }
+		end
+	end
+
+	for Key, Color in Library.Theme do
+		if typeof(Color) == "Color3" then
+			Data.Theme[Key] = EncodeColor(Color)
+		end
+	end
+
+	return Data
+end
+
+Library.SetFlag = function(Flag: string, Value: any, Transparency: number?)
+	local Entry = Library.Flags[Flag]
+	if not Entry then
+		return
+	end
+	if Entry.Set then
+		if Transparency ~= nil then
+			Entry.Set(Value, Transparency)
+		else
+			Entry.Set(Value)
+		end
+	else
+		Entry.Value = Value
+	end
+end
+
+Library.LoadConfigData = function(Data: {})
+	if type(Data) ~= "table" then
+		return
+	end
+
+	if type(Data.Theme) == "table" then
+		for Key, Value in Data.Theme do
+			local Color = DecodeColor(Value)
+			if Color then
+				Library.Theme[Key] = Color
+			end
+		end
+	end
+
+	if type(Data.MenuKey) == "string" and EKC[Data.MenuKey] then
+		Library.MenuKey = EKC[Data.MenuKey]
+	end
+
+	if type(Data.Flags) == "table" then
+		for Flag, Packed in Data.Flags do
+			local Entry = Library.Flags[Flag]
+			if not Entry or type(Packed) ~= "table" then
+				continue
+			end
+			local Type = Packed.Type
+			if Type == "Color3" then
+				local Color = DecodeColor(Packed.Color)
+				if Color then
+					Library.SetFlag(Flag, Color, Packed.Transparency)
+				end
+			elseif Type == "Enum" and Packed.Name then
+				local EnumType = (Enum :: any)[Packed.EnumType]
+				if EnumType and EnumType[Packed.Name] then
+					Library.SetFlag(Flag, EnumType[Packed.Name])
+				end
+			elseif Type == "table" then
+				Library.SetFlag(Flag, Packed.Value)
+			else
+				Library.SetFlag(Flag, Packed.Value)
+			end
+		end
+	end
+end
+
+Library.SaveConfig = function(Name: string)
+	if not writefile then
+		warn("[Lumen] writefile is unavailable")
+		return false
+	end
+	EnsureFolder()
+	local Data = Library.GetConfig()
+	Data.Name = Name
+	Data.SavedAt = os.date("%Y-%m-%d %H:%M:%S")
+	local Ok, Encoded = pcall(function()
+		return game:GetService("HttpService"):JSONEncode(Data)
+	end)
+	if not Ok then
+		warn("[Lumen] failed to encode config", Encoded)
+		return false
+	end
+	writefile(ConfigPath(Name), Encoded)
+	return true
+end
+
+Library.LoadConfig = function(Name: string)
+	if not readfile or not isfile then
+		warn("[Lumen] readfile is unavailable")
+		return false
+	end
+	local Path = ConfigPath(Name)
+	if not isfile(Path) then
+		warn("[Lumen] config not found:", Name)
+		return false
+	end
+	local Raw = readfile(Path)
+	local Ok, Data = pcall(function()
+		return game:GetService("HttpService"):JSONDecode(Raw)
+	end)
+	if not Ok or type(Data) ~= "table" then
+		warn("[Lumen] invalid config:", Name)
+		return false
+	end
+	Library.LoadConfigData(Data)
+	return true
+end
+
+Library.DeleteConfig = function(Name: string)
+	if not delfile or not isfile then
+		return false
+	end
+	local Path = ConfigPath(Name)
+	if isfile(Path) then
+		delfile(Path)
+		return true
+	end
+	return false
+end
+
+Library.ListConfigs = function(): { string }
+	local List = {}
+	if not listfiles then
+		return List
+	end
+	EnsureFolder()
+	local Ok, Files = pcall(listfiles, Library.Folder)
+	if not Ok or type(Files) ~= "table" then
+		return List
+	end
+	for _, Path in Files do
+		local Name = tostring(Path):match("([^/\\]+)%.json$")
+		if Name then
+			TIS(List, Name)
+		end
+	end
+	table.sort(List)
+	return List
+end
+
+Library.SetAutoload = function(Name: string?)
+	Library.Autoload = Name
+	if writefile then
+		EnsureFolder()
+		writefile(Library.Folder .. "/autoload.txt", Name or "")
+	end
+end
+
+Library.GetAutoload = function(): string?
+	if Library.Autoload then
+		return Library.Autoload
+	end
+	if isfile and isfile(Library.Folder .. "/autoload.txt") then
+		local Name = readfile(Library.Folder .. "/autoload.txt")
+		if Name ~= "" then
+			Library.Autoload = Name
+			return Name
+		end
+	end
+	return nil
+end
+
+Library.RegisterFlag = function(Flag: string, Entry: {})
+	if not Flag or Flag == "" then
+		return
+	end
+	Library.Flags[Flag] = Entry
+end
+
+--@ loading screen matching Lumen theme
+Library.LoadingScreen = function(self: Library, propertyTable: {})
+	local Props = Overwrite({
+		Title = "Lumen";
+		Subtitle = "Loading…";
+		Duration = 1.6;
+	}, propertyTable or {})
+
+	local Gui = Add("ScreenGui", {
+		Parent = RunService:IsStudio() and Client.PlayerGui or Services:GetService("CoreGui");
+		Name = "LumenLoading";
+		ZIndexBehavior = ZIB.Sibling;
+		IgnoreGuiInset = true;
+	})
+
+	local Backdrop = Add("Frame", {
+		Parent = Gui;
+		BackgroundColor3 = Library.Theme.Background;
+		BorderSizePixel = 0;
+		Size = UFS(1, 1);
+	})
+	local Card = Add("Frame", {
+		Parent = Backdrop;
+		AnchorPoint = V2(0.5, 0.5);
+		Position = UFS(0.5, 0.5);
+		Size = UFO(280, 120);
+		BackgroundColor3 = Library.Theme.Surface;
+		BorderSizePixel = 0;
+	})
+	Add("UICorner", { Parent = Card; CornerRadius = UD(0, 8); })
+	Add("UIStroke", { Parent = Card; ApplyStrokeMode = ASM.Border; Color = Library.Theme.Border; })
+	Add("TextLabel", {
+		Parent = Card;
+		BackgroundTransparency = 1;
+		Position = UFO(0, 28);
+		Size = UD2(1, 0, 0, 22);
+		FontFace = FN("rbxassetid://12187365364", FW.SemiBold, FS.Normal);
+		Text = Props.Title;
+		TextColor3 = Library.Theme.Text;
+		TextSize = 18;
+	})
+	Add("TextLabel", {
+		Parent = Card;
+		BackgroundTransparency = 1;
+		Position = UFO(0, 54);
+		Size = UD2(1, 0, 0, 18);
+		FontFace = FN("rbxassetid://12187365364", FW.SemiBold, FS.Normal);
+		Text = Props.Subtitle;
+		TextColor3 = Library.Theme.Text;
+		TextTransparency = 0.45;
+		TextSize = 13;
+	})
+	local BarBG = Add("Frame", {
+		Parent = Card;
+		BackgroundColor3 = Library.Theme.SurfaceAlt;
+		BorderSizePixel = 0;
+		Position = UD2(0.5, 0, 1, -28);
+		AnchorPoint = V2(0.5, 0);
+		Size = UD2(0.7, 0, 0, 6);
+	})
+	Add("UICorner", { Parent = BarBG; CornerRadius = UD(1, 0); })
+	local Bar = Add("Frame", {
+		Parent = BarBG;
+		BackgroundColor3 = Library.Theme.Accent;
+		BorderSizePixel = 0;
+		Size = UD2(0, 0, 1, 0);
+	})
+	Add("UICorner", { Parent = Bar; CornerRadius = UD(1, 0); })
+	Add("UIGradient", {
+		Parent = Bar;
+		Color = CS{ CSK(0, Library.Theme.AccentDark), CSK(1, Library.Theme.Accent) };
+		Rotation = -90;
+	})
+
+	Tween(Bar, { Size = UD2(1, 0, 1, 0) }, Props.Duration, ES.Quad, ED.Out)
+
+	task.delay(Props.Duration + 0.15, function()
+		Tween(Backdrop, { BackgroundTransparency = 1 }, 0.25)
+		Tween(Card, { BackgroundTransparency = 1 }, 0.25)
+		task.wait(0.3)
+		Gui:Destroy()
+	end)
+
+	return Gui
+end
+
+Library.ToggleMenu = function(State: boolean?)
+	if State == nil then
+		State = not Library.MenuOpen
+	end
+	Library.MenuOpen = State
+	for _, Win in Library.Windows do
+		if Win.Canvas then
+			Win.Canvas.Visible = State
+		end
+	end
+	if Library.OpenPopup and Library.OpenPopup.Close then
+		Library.OpenPopup.Close()
+	end
+end
+
+UserInputService.InputBegan:Connect(function(Input, GameProcessed)
+	if GameProcessed then
+		return
+	end
+	if Library.MenuKey and Input.KeyCode == Library.MenuKey then
+		Library.ToggleMenu()
+	end
+end)
+
+--@ build Config page UI onto a window
+Library.BuildConfigPage = function(self: Library, Window: any)
+	local Page = Window:Page({ Icon = "save" })
+	local Manager = Page:SubPage({ Name = "Manager" })
+	local ThemePage = Page:SubPage({ Name = "Theme" })
+
+	local ListSection = Manager:Section({ Name = "Configs"; Side = "Left"; Icon = "folder" })
+	local InfoSection = Manager:Section({ Name = "Info"; Side = "Right"; Icon = "info" })
+	local ThemeSection = ThemePage:Section({ Name = "Colors"; Side = "Left"; Icon = "palette" })
+	local MenuSection = ThemePage:Section({ Name = "Menu"; Side = "Right"; Icon = "settings" })
+
+	local Selected = { Name = nil :: string? }
+
+	local ConfigInput = ListSection:Input({
+		Name = "Name";
+		Value = "default";
+		Placeholder = "config name";
+		Flag = "ConfigName";
+		Callback = function() end;
+	})
+
+	local function RefreshInfo()
+		--@ info is driven by labels recreated lightly via prints; keep simple text fields
+	end
+
+	local StatusLabel = InfoSection:Label({ Text = "No config selected" })
+	local MetaLabel = InfoSection:Label({ Text = "Save to create a profile" })
+	local ThemeLabel = InfoSection:Label({ Text = "Theme: Lumen default" })
+	local ScriptLabel = InfoSection:Label({ Text = "Script: Lumen UI" })
+
+	local function SelectConfig(Name: string)
+		Selected.Name = Name
+		ConfigInput.Set(Name)
+		StatusLabel.LeftContent:FindFirstChild("Label").Text = "Selected: " .. Name
+		local Autoload = Library.GetAutoload()
+		MetaLabel.LeftContent:FindFirstChild("Label").Text = Autoload == Name and "Autoload: yes" or "Autoload: no"
+		ThemeLabel.LeftContent:FindFirstChild("Label").Text = "Theme: custom"
+		ScriptLabel.LeftContent:FindFirstChild("Label").Text = "Script: Lumen UI"
+	end
+
+	local function SaveSelected()
+		local Name = ConfigInput.Value ~= "" and ConfigInput.Value or "default"
+		if Library.SaveConfig(Name) then
+			SelectConfig(Name)
+			StatusLabel.LeftContent:FindFirstChild("Label").Text = "Saved: " .. Name
+		end
+	end
+
+	local SaveRow = ListSection:Label({ Text = "Save / Load" })
+	--@ use toggles as action stand-ins via callbacks on load buttons pattern - dropdown of configs
+	local ConfigDropdown = ListSection:Dropdown({
+		Name = "Saved configs";
+		Options = Library.ListConfigs();
+		Value = Library.ListConfigs()[1] or "";
+		Flag = "ConfigSelected";
+		Callback = function(Value)
+			if Value and Value ~= "" then
+				SelectConfig(Value)
+			end
+		end;
+	})
+
+	local function ReloadList()
+		local Names = Library.ListConfigs()
+		ConfigDropdown.UpdateOptions(Names)
+		if Selected.Name then
+			ConfigDropdown.Set(Selected.Name)
+		end
+	end
+
+	local Actions = ListSection:Label({ Text = "Actions" })
+	--@ dedicated buttons via Input focus tricks aren't ideal; expose library API in callbacks
+	local LoadToggle = Actions
+	ListSection:Dropdown({
+		Name = "Quick action";
+		Options = { "Load", "Save", "Overwrite", "Set autoload", "Delete", "Refresh list" };
+		Value = "Load";
+		Callback = function(Action)
+			local Name = ConfigInput.Value ~= "" and ConfigInput.Value or Selected.Name or "default"
+			if Action == "Refresh list" then
+				ReloadList()
+			elseif Action == "Save" or Action == "Overwrite" then
+				Library.SaveConfig(Name)
+				ReloadList()
+				SelectConfig(Name)
+			elseif Action == "Load" then
+				if Library.LoadConfig(Name) then
+					SelectConfig(Name)
+					StatusLabel.LeftContent:FindFirstChild("Label").Text = "Loaded: " .. Name
+				end
+			elseif Action == "Set autoload" then
+				Library.SetAutoload(Name)
+				SelectConfig(Name)
+			elseif Action == "Delete" then
+				Library.DeleteConfig(Name)
+				Selected.Name = nil
+				ReloadList()
+				StatusLabel.LeftContent:FindFirstChild("Label").Text = "Deleted: " .. Name
+			end
+		end;
+	})
+
+	local AccentLabel = ThemeSection:Label({ Text = "Accent" })
+	AccentLabel:Colorpicker({
+		Color = Library.Theme.Accent;
+		Flag = "ThemeAccent";
+		Callback = function(Color)
+			Library.Theme.Accent = Color
+		end;
+	})
+	local BgLabel = ThemeSection:Label({ Text = "Background" })
+	BgLabel:Colorpicker({
+		Color = Library.Theme.Background;
+		Flag = "ThemeBackground";
+		Callback = function(Color)
+			Library.Theme.Background = Color
+		end;
+	})
+	local SurfaceLabel = ThemeSection:Label({ Text = "Surface" })
+	SurfaceLabel:Colorpicker({
+		Color = Library.Theme.Surface;
+		Flag = "ThemeSurface";
+		Callback = function(Color)
+			Library.Theme.Surface = Color
+		end;
+	})
+
+	MenuSection:Dropdown({
+		Name = "Menu key";
+		Options = { "LeftAlt", "RightAlt", "LeftControl", "RightControl", "RightShift", "Insert", "Delete" };
+		Value = Library.MenuKey.Name;
+		Flag = "MenuKeyName";
+		Callback = function(Name)
+			if EKC[Name] then
+				Library.MenuKey = EKC[Name]
+			end
+		end;
+	})
+
+	local Unload = MenuSection:Label({ Text = "Unload menu" })
+	Unload:Toggle({
+		State = false;
+		Callback = function(State)
+			if State then
+				Library.ToggleMenu(false)
+			end
+		end;
+	})
+
+	ReloadList()
+	local Autoload = Library.GetAutoload()
+	if Autoload then
+		Library.LoadConfig(Autoload)
+		SelectConfig(Autoload)
+	end
+
+	return Page
+end
+
+
 return Library
