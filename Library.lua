@@ -447,7 +447,7 @@ local function BindDrag(Object: GuiObject, Handle: GuiObject?, ClampScreen: bool
 			if ClampScreen then
 				Target = ClampToScreen(Object, Target)
 			end
-			Object.Position = Object.Position:Lerp(Target, 0.55)
+			Object.Position = Object.Position:Lerp(Target, 0.88)
 		end)
 	end)
 
@@ -3007,39 +3007,31 @@ Library.SetWatermark = function(Text: string?, Enabled: boolean?)
 			LayoutOrder = Order;
 		})
 	end
-	local function Dot(Order: number)
-		local Wrap = Add("Frame", {
-			Parent = Frame;
-			BackgroundTransparency = 1;
-			Size = UFO(4, 32);
-			LayoutOrder = Order;
-		})
-		local D = Add("Frame", {
-			Parent = Wrap;
-			AnchorPoint = V2(0.5, 0.5);
-			Position = UFS(0.5, 0.5);
-			Size = UFO(3, 3);
-			BackgroundColor3 = RGB(90, 94, 110);
-			BorderSizePixel = 0;
-		})
-		Add("UICorner", { Parent = D; CornerRadius = UD(1, 0); })
-		return Wrap
+
+	--@ plain ASCII separator only (no unicode diamonds / middle dots)
+	local function Sep(Order: number)
+		return Chip("-", Order, true)
 	end
 
-	--@ strip trailing place ids / pure numbers from custom text
 	local CleanText = tostring(Library.Watermark.Text or "Lumen")
-		:gsub("%s*[·•|%-]?%s*%d%d%d%d%d+%s*$", "")
-		:gsub("^%d+$", "Lumen")
+	--@ drop place ids, bullets, diamonds, pipes
+	CleanText = CleanText
+		:gsub("[
+8r94839483·•▪▫◆◇|]+", " ")
+		:gsub("%s+%d%d%d%d%d+%s*", " ")
+		:gsub("%s+", " ")
+		:gsub("^%s+", "")
+		:gsub("%s+$", "")
 	if CleanText == "" or CleanText:match("^%d+$") then
 		CleanText = "Lumen"
 	end
 
 	local Title = Chip(CleanText, 1, false)
-	Dot(2)
+	Sep(2)
 	local FpsL = Chip("0 fps", 3, true)
-	Dot(4)
+	Sep(4)
 	local PingL = Chip("0 ms", 5, true)
-	Dot(6)
+	Sep(6)
 	local TimeL = Chip(os.date("%H:%M:%S"), 7, true)
 
 	Library.Watermark.Frame = Frame
@@ -3325,21 +3317,23 @@ Library.Notify = function(propertyTable: {})
 		Title = "Notification";
 		Text = "";
 		Content = nil;
-		Duration = 3;
+		Duration = 3.5;
 		Type = "Info";
 	}, propertyTable or {})
 
 	local Content = Props.Content or Props.Text or ""
-	local Duration = Props.Duration or 3
+	local Duration = Props.Duration or 3.5
 	local T = Library.Theme
 
-	local TypeColor = T.Text
+	local TypeColor = T.Accent
 	if Props.Type == "Success" then
 		TypeColor = RGB(150, 220, 170)
 	elseif Props.Type == "Warning" or Props.Type == "Warn" then
 		TypeColor = RGB(240, 176, 108)
 	elseif Props.Type == "Error" then
 		TypeColor = RGB(240, 120, 120)
+	elseif Props.Type == "Info" then
+		TypeColor = T.Text
 	end
 
 	local Gui = EnsureOverlayGui()
@@ -3348,13 +3342,13 @@ Library.Notify = function(propertyTable: {})
 			Parent = Gui;
 			Name = "Notifications";
 			BackgroundTransparency = 1;
-			Size = UFO(240, 0);
+			Size = UFO(280, 0);
 			AutomaticSize = AS.Y;
 			ZIndex = 200;
 		})
 		Add("UIListLayout", {
 			Parent = Library._NotifyHost;
-			Padding = UD(0, 8);
+			Padding = UD(0, 10);
 			SortOrder = SO.LayoutOrder;
 			HorizontalAlignment = HFA.Right;
 		})
@@ -3364,19 +3358,19 @@ Library.Notify = function(propertyTable: {})
 	local Layout = Library._NotifyHost:FindFirstChildOfClass("UIListLayout")
 	if Pos == "Top Left" then
 		Library._NotifyHost.AnchorPoint = V2(0, 0)
-		Library._NotifyHost.Position = UFO(14, 14)
+		Library._NotifyHost.Position = UFO(16, 16)
 		Layout.HorizontalAlignment = HFA.Left
 	elseif Pos == "Bottom Left" then
 		Library._NotifyHost.AnchorPoint = V2(0, 1)
-		Library._NotifyHost.Position = UD2(0, 14, 1, -14)
+		Library._NotifyHost.Position = UD2(0, 16, 1, -16)
 		Layout.HorizontalAlignment = HFA.Left
 	elseif Pos == "Bottom Right" then
 		Library._NotifyHost.AnchorPoint = V2(1, 1)
-		Library._NotifyHost.Position = UD2(1, -14, 1, -14)
+		Library._NotifyHost.Position = UD2(1, -16, 1, -16)
 		Layout.HorizontalAlignment = HFA.Right
 	else
 		Library._NotifyHost.AnchorPoint = V2(1, 0)
-		Library._NotifyHost.Position = UD2(1, -14, 0, 14)
+		Library._NotifyHost.Position = UD2(1, -16, 0, 16)
 		Layout.HorizontalAlignment = HFA.Right
 	end
 
@@ -3392,39 +3386,51 @@ Library.Notify = function(propertyTable: {})
 	local SlideDir = (Pos:find("Left") and -1) or 1
 	local Shell = Add("Frame", {
 		Parent = Slot;
-		Position = UFO(260 * SlideDir, 0);
+		Position = UFO(300 * SlideDir, 0);
 		Size = UD2(1, 0, 0, 0);
 		AutomaticSize = AS.Y;
 		BackgroundTransparency = 1;
 	})
 
-	local Card = Add("Frame", {
+	local Shadow = Add("ImageLabel", {
+		Parent = Shell;
+		Position = UFO(-16, -16);
+		Size = UD2(1, 32, 1, 32);
+		BackgroundTransparency = 1;
+		Image = "rbxassetid://6014261993";
+		ImageColor3 = RGB(0, 0, 0);
+		ImageTransparency = 1;
+		ScaleType = SCL.Slice;
+		SliceCenter = Rect.new(49, 49, 450, 450);
+		ZIndex = 0;
+	})
+
+	local Card = Add("CanvasGroup", {
 		Parent = Shell;
 		Size = UD2(1, 0, 0, 0);
 		AutomaticSize = AS.Y;
-		BackgroundColor3 = T.Surface or RGB(15, 14, 15);
+		BackgroundColor3 = T.Background or RGB(9, 8, 8);
 		BorderSizePixel = 0;
-		BackgroundTransparency = 1;
+		GroupTransparency = 1;
 		ZIndex = 1;
 	})
-	Add("UICorner", { Parent = Card; CornerRadius = UD(0, 6); })
+	Add("UICorner", { Parent = Card; CornerRadius = UD(0, 8); })
 	local CardStroke = Add("UIStroke", {
 		Parent = Card;
 		ApplyStrokeMode = ASM.Border;
 		Color = T.Border or RGB(36, 37, 37);
 		Thickness = 1;
-		Transparency = 1;
 	})
 
-	--@ left accent strip
-	local Accent = Add("Frame", {
+	--@ top hairline like main menu sections
+	Add("Frame", {
 		Parent = Card;
-		Size = UD2(0, 2, 1, 0);
-		BackgroundColor3 = (Props.Type == "Info") and T.Accent or TypeColor;
+		Size = UD2(1, 0, 0, 1);
+		BackgroundColor3 = RGB(255, 255, 255);
+		BackgroundTransparency = 0.94;
 		BorderSizePixel = 0;
 		ZIndex = 2;
 	})
-	Add("UICorner", { Parent = Accent; CornerRadius = UD(0, 2); })
 
 	local Body = Add("Frame", {
 		Parent = Card;
@@ -3435,45 +3441,45 @@ Library.Notify = function(propertyTable: {})
 	})
 	Add("UIPadding", {
 		Parent = Body;
-		PaddingLeft = UD(0, 12);
-		PaddingRight = UD(0, 10);
-		PaddingTop = UD(0, 8);
-		PaddingBottom = UD(0, 10);
+		PaddingLeft = UD(0, 14);
+		PaddingRight = UD(0, 12);
+		PaddingTop = UD(0, 12);
+		PaddingBottom = UD(0, 16);
 	})
 
-	local TitleRow = Add("Frame", {
+	local Title = Add("TextLabel", {
 		Parent = Body;
 		BackgroundTransparency = 1;
-		Size = UD2(1, 0, 0, 16);
-	})
-	Add("TextLabel", {
-		Parent = TitleRow;
-		BackgroundTransparency = 1;
-		Size = UD2(1, -18, 1, 0);
+		Size = UD2(1, -22, 0, 15);
 		FontFace = FN("rbxassetid://12187365364", FW.SemiBold, FS.Normal);
 		Text = Props.Title;
 		TextColor3 = TypeColor;
-		TextSize = 12;
+		TextSize = 13;
 		TextXAlignment = TXA.Left;
-		TextTransparency = 1;
-		Name = "Title";
-	})
-	local Close = Add("TextButton", {
-		Parent = TitleRow;
-		AnchorPoint = V2(1, 0.5);
-		Position = UFS(1, 0.5);
-		Size = UFO(16, 16);
-		BackgroundTransparency = 1;
-		Text = "×";
-		TextColor3 = RGB(140, 144, 155);
-		TextSize = 14;
-		FontFace = FN("rbxassetid://12187365364", FW.SemiBold, FS.Normal);
-		AutoButtonColor = false;
 	})
 
-	local ContentLabel = nil
+	local Close = Add("TextButton", {
+		Parent = Body;
+		AnchorPoint = V2(1, 0);
+		Position = UD2(1, 4, 0, -2);
+		Size = UFO(20, 20);
+		BackgroundTransparency = 1;
+		Text = "x";
+		TextColor3 = RGB(140, 144, 155);
+		TextSize = 13;
+		FontFace = FN("rbxassetid://12187365364", FW.SemiBold, FS.Normal);
+		AutoButtonColor = false;
+		ZIndex = 4;
+	})
+	Close.MouseEnter:Connect(function()
+		Tween(Close, { TextColor3 = T.Text }, 0.12)
+	end)
+	Close.MouseLeave:Connect(function()
+		Tween(Close, { TextColor3 = RGB(140, 144, 155) }, 0.15)
+	end)
+
 	if Content ~= "" then
-		ContentLabel = Add("TextLabel", {
+		Add("TextLabel", {
 			Parent = Body;
 			BackgroundTransparency = 1;
 			Position = UFO(0, 18);
@@ -3482,23 +3488,21 @@ Library.Notify = function(propertyTable: {})
 			FontFace = FN("rbxassetid://12187365364", FW.SemiBold, FS.Normal);
 			Text = Content;
 			TextColor3 = RGB(160, 164, 175);
-			TextSize = 11;
+			TextSize = 12;
 			TextWrapped = true;
 			TextXAlignment = TXA.Left;
 			TextYAlignment = TYA.Top;
-			TextTransparency = 1;
-			Name = "Body";
 		})
 	end
 
 	local BarBG = Add("Frame", {
 		Parent = Card;
 		AnchorPoint = V2(0, 1);
-		Position = UD2(0, 10, 1, -4);
-		Size = UD2(1, -20, 0, 2);
+		Position = UD2(0, 14, 1, -7);
+		Size = UD2(1, -28, 0, 2);
 		BackgroundColor3 = T.SurfaceAlt or RGB(20, 20, 21);
 		BorderSizePixel = 0;
-		ZIndex = 4;
+		ZIndex = 5;
 	})
 	Add("UICorner", { Parent = BarBG; CornerRadius = UD(1, 0); })
 	local Bar = Add("Frame", {
@@ -3508,22 +3512,21 @@ Library.Notify = function(propertyTable: {})
 		BorderSizePixel = 0;
 	})
 	Add("UICorner", { Parent = Bar; CornerRadius = UD(1, 0); })
+	Add("UIGradient", {
+		Parent = Bar;
+		Color = CS{ CSK(0, T.AccentDark or T.Accent), CSK(1, T.Accent) };
+	})
 
 	task.defer(function()
 		if Slot.Parent then
-			local H = math.max(Card.AbsoluteSize.Y, 36)
-			Tween(Slot, { Size = UD2(1, 0, 0, H) }, 0.25, ES.Quint)
+			local H = math.max(Card.AbsoluteSize.Y, 44)
+			Tween(Slot, { Size = UD2(1, 0, 0, H) }, 0.32, ES.Quint)
 		end
 	end)
 
-	Tween(Shell, { Position = UFO(0, 0) }, 0.35, ES.Quint)
-	Tween(Card, { BackgroundTransparency = 0 }, 0.2)
-	Tween(CardStroke, { Transparency = 0 }, 0.2)
-	for _, D in Card:GetDescendants() do
-		if D:IsA("TextLabel") then
-			Tween(D, { TextTransparency = 0 }, 0.2)
-		end
-	end
+	Tween(Shell, { Position = UFO(0, 0) }, 0.45, ES.Back)
+	Tween(Card, { GroupTransparency = 0 }, 0.28)
+	Tween(Shadow, { ImageTransparency = 0.62 }, 0.35)
 	Tween(Bar, { Size = UD2(0, 0, 1, 0) }, Duration, ES.Linear)
 
 	local Closed = false
@@ -3536,13 +3539,13 @@ Library.Notify = function(propertyTable: {})
 				break
 			end
 		end
-		Tween(Shell, { Position = UFO(260 * SlideDir, 0) }, 0.25, ES.Quint)
-		Tween(Card, { BackgroundTransparency = 1 }, 0.18)
-		Tween(CardStroke, { Transparency = 1 }, 0.15)
-		task.delay(0.2, function()
+		Tween(Shell, { Position = UFO(300 * SlideDir, 0) }, 0.28, ES.Quint)
+		Tween(Card, { GroupTransparency = 1 }, 0.2)
+		Tween(Shadow, { ImageTransparency = 1 }, 0.2)
+		task.delay(0.22, function()
 			Slot.ClipsDescendants = true
-			Tween(Slot, { Size = UD2(1, 0, 0, 0) }, 0.18, ES.Quint)
-			task.delay(0.2, function()
+			Tween(Slot, { Size = UD2(1, 0, 0, 0) }, 0.2, ES.Quint)
+			task.delay(0.22, function()
 				Slot:Destroy()
 			end)
 		end)
