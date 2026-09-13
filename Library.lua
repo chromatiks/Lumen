@@ -1833,6 +1833,13 @@ Library.SubElements.Keybind = function(self: Library, propertyTable: {})
 		Keybind.Key = Key
 		KeyButton.Text = Format(Key)
 		local Title = Keybind.Title ~= "" and Keybind.Title or (self.Text or "Keybind")
+		Library.KeybindRegistry = Library.KeybindRegistry or {}
+		Library.KeybindRegistry[Title] = {
+			Name = Title;
+			KeyText = Format(Key);
+			Active = Keybind.State == true;
+			Mode = Keybind.Type or "Toggle";
+		}
 		Library.UpdateKeybindList(Title, Format(Key), Keybind.State, Keybind.Type)
 	end
 
@@ -1971,6 +1978,11 @@ Library.SubElements.Keybind = function(self: Library, propertyTable: {})
 
 	Keybind.SetType(Keybind.Type)
 	Keybind.Set(Keybind.Key)
+	--@ force list row even if list was recreated after
+	task.defer(function()
+		local Title = Keybind.Title ~= "" and Keybind.Title or (self.Text or "Keybind")
+		Library.UpdateKeybindList(Title, Format(Keybind.Key), false, Keybind.Type)
+	end)
 	return Keybind
 end
 
@@ -2997,36 +3009,26 @@ Library.SetWatermark = function(Text: string?, Enabled: boolean?)
 		return Chip("·", Order, true)
 	end
 
-	local Title = Chip(Library.Watermark.Text or "Lumen", 1, false)
+	--@ strip trailing place ids / pure numbers from custom text
+	local CleanText = tostring(Library.Watermark.Text or "Lumen")
+		:gsub("%s*[·•|%-]?%s*%d%d%d%d%d+%s*$", "")
+		:gsub("^%d+$", "Lumen")
+	if CleanText == "" or CleanText:match("^%d+$") then
+		CleanText = "Lumen"
+	end
+
+	local Title = Chip(CleanText, 1, false)
 	Dot(2)
-	local Place = Chip("…", 3, true)
-	Place.Visible = false --@ hidden until a real place name resolves (never show PlaceId)
-	local PlaceDot = Dot(4)
-	PlaceDot.Visible = false
-	local FpsL = Chip("0 fps", 5, true)
+	local FpsL = Chip("0 fps", 3, true)
+	Dot(4)
+	local PingL = Chip("0 ms", 5, true)
 	Dot(6)
-	local PingL = Chip("0 ms", 7, true)
-	Dot(8)
-	local TimeL = Chip(os.date("%H:%M:%S"), 9, true)
+	local TimeL = Chip(os.date("%H:%M:%S"), 7, true)
 
 	Library.Watermark.Frame = Frame
 	Library.Watermark.Label = Title
 	Library.Watermark.Stats = FpsL
 	Library.Watermark.Accent = Logo
-
-	task.spawn(function()
-		local Ok, Info = pcall(function()
-			return game:GetService("MarketplaceService"):GetProductInfo(game.PlaceId)
-		end)
-		if Ok and Info and type(Info.Name) == "string" and Info.Name ~= "" and Place and Place.Parent then
-			--@ skip pure numeric names
-			if not Info.Name:match("^%d+$") then
-				Place.Text = Info.Name
-				Place.Visible = true
-				PlaceDot.Visible = true
-			end
-		end
-	end)
 
 	if Library.Watermark._StatsConn then
 		Library.Watermark._StatsConn:Disconnect()
@@ -3189,6 +3191,11 @@ Library.SetKeybindList = function(Enabled: boolean?)
 	Library.KeybindList.RowsFolder = Rows
 	Library.KeybindList.Rows = {}
 	Library.KeybindList.Accent = HeaderIcon
+
+	--@ re-show every registered keybind immediately
+	for _, Entry in pairs(Library.KeybindRegistry or {}) do
+		Library.UpdateKeybindList(Entry.Name, Entry.KeyText, Entry.Active, Entry.Mode)
+	end
 end
 
 Library.UpdateKeybindList = function(Name: string, KeyText: string, Active: boolean?, Mode: string?)
@@ -3299,12 +3306,12 @@ Library.Notify = function(propertyTable: {})
 		Title = "Notification";
 		Text = "";
 		Content = nil;
-		Duration = 4;
-		Type = "Info"; -- Info / Success / Warning / Error
+		Duration = 3;
+		Type = "Info";
 	}, propertyTable or {})
 
 	local Content = Props.Content or Props.Text or ""
-	local Duration = Props.Duration or 4
+	local Duration = Props.Duration or 3
 	local T = Library.Theme
 
 	local TypeColor = T.Text
@@ -3322,13 +3329,13 @@ Library.Notify = function(propertyTable: {})
 			Parent = Gui;
 			Name = "Notifications";
 			BackgroundTransparency = 1;
-			Size = UFO(320, 0);
+			Size = UFO(240, 0);
 			AutomaticSize = AS.Y;
 			ZIndex = 200;
 		})
 		Add("UIListLayout", {
 			Parent = Library._NotifyHost;
-			Padding = UD(0, 10);
+			Padding = UD(0, 8);
 			SortOrder = SO.LayoutOrder;
 			HorizontalAlignment = HFA.Right;
 		})
@@ -3338,19 +3345,19 @@ Library.Notify = function(propertyTable: {})
 	local Layout = Library._NotifyHost:FindFirstChildOfClass("UIListLayout")
 	if Pos == "Top Left" then
 		Library._NotifyHost.AnchorPoint = V2(0, 0)
-		Library._NotifyHost.Position = UFO(16, 16)
+		Library._NotifyHost.Position = UFO(14, 14)
 		Layout.HorizontalAlignment = HFA.Left
 	elseif Pos == "Bottom Left" then
 		Library._NotifyHost.AnchorPoint = V2(0, 1)
-		Library._NotifyHost.Position = UD2(0, 16, 1, -16)
+		Library._NotifyHost.Position = UD2(0, 14, 1, -14)
 		Layout.HorizontalAlignment = HFA.Left
 	elseif Pos == "Bottom Right" then
 		Library._NotifyHost.AnchorPoint = V2(1, 1)
-		Library._NotifyHost.Position = UD2(1, -16, 1, -16)
+		Library._NotifyHost.Position = UD2(1, -14, 1, -14)
 		Layout.HorizontalAlignment = HFA.Right
 	else
 		Library._NotifyHost.AnchorPoint = V2(1, 0)
-		Library._NotifyHost.Position = UD2(1, -16, 0, 16)
+		Library._NotifyHost.Position = UD2(1, -14, 0, 14)
 		Layout.HorizontalAlignment = HFA.Right
 	end
 
@@ -3366,144 +3373,113 @@ Library.Notify = function(propertyTable: {})
 	local SlideDir = (Pos:find("Left") and -1) or 1
 	local Shell = Add("Frame", {
 		Parent = Slot;
-		Position = UFO(320 * SlideDir, 0);
+		Position = UFO(260 * SlideDir, 0);
 		Size = UD2(1, 0, 0, 0);
 		AutomaticSize = AS.Y;
 		BackgroundTransparency = 1;
 	})
 
-	--@ soft drop shadow
-	local Shadow = Add("ImageLabel", {
-		Parent = Shell;
-		Position = UFO(-18, -18);
-		Size = UD2(1, 36, 1, 36);
-		BackgroundTransparency = 1;
-		Image = "rbxassetid://6014261993";
-		ImageColor3 = RGB(0, 0, 0);
-		ImageTransparency = 1;
-		ScaleType = SCL.Slice;
-		SliceCenter = Rect.new(49, 49, 450, 450);
-		ZIndex = 0;
-	})
-
-	local Card = Add("CanvasGroup", {
+	local Card = Add("Frame", {
 		Parent = Shell;
 		Size = UD2(1, 0, 0, 0);
 		AutomaticSize = AS.Y;
-		BackgroundColor3 = T.Background;
+		BackgroundColor3 = T.Surface or RGB(15, 14, 15);
 		BorderSizePixel = 0;
-		GroupTransparency = 1;
+		BackgroundTransparency = 1;
 		ZIndex = 1;
 	})
-	Add("UICorner", { Parent = Card; CornerRadius = UD(0, 10); })
+	Add("UICorner", { Parent = Card; CornerRadius = UD(0, 6); })
 	local CardStroke = Add("UIStroke", {
 		Parent = Card;
 		ApplyStrokeMode = ASM.Border;
-		Color = T.Border;
+		Color = T.Border or RGB(36, 37, 37);
 		Thickness = 1;
+		Transparency = 1;
 	})
 
-	--@ top hairline
-	Add("Frame", {
+	--@ left accent strip
+	local Accent = Add("Frame", {
 		Parent = Card;
-		Size = UD2(1, 0, 0, 1);
-		BackgroundColor3 = RGB(255, 255, 255);
-		BackgroundTransparency = 0.93;
+		Size = UD2(0, 2, 1, 0);
+		BackgroundColor3 = (Props.Type == "Info") and T.Accent or TypeColor;
 		BorderSizePixel = 0;
 		ZIndex = 2;
 	})
-
-	--@ accent glow corner
-	local Glow = Add("ImageLabel", {
-		Parent = Card;
-		AnchorPoint = V2(1, 0);
-		Position = UD2(1, -8, 0, -8);
-		Size = UFO(200, 100);
-		BackgroundTransparency = 1;
-		Image = "rbxassetid://8992230677";
-		ImageColor3 = T.Accent;
-		ImageTransparency = 0.86;
-		ZIndex = 0;
-	})
-	Add("UIGradient", {
-		Parent = Glow;
-		Color = CS{ CSK(0, RGB(255, 255, 255)), CSK(1, T.Accent) };
-		Rotation = 90;
-	})
+	Add("UICorner", { Parent = Accent; CornerRadius = UD(0, 2); })
 
 	local Body = Add("Frame", {
 		Parent = Card;
+		BackgroundTransparency = 1;
 		Size = UD2(1, 0, 0, 0);
 		AutomaticSize = AS.Y;
-		BackgroundTransparency = 1;
 		ZIndex = 3;
 	})
 	Add("UIPadding", {
 		Parent = Body;
-		PaddingLeft = UD(0, 16);
-		PaddingRight = UD(0, 16);
-		PaddingTop = UD(0, 14);
-		PaddingBottom = UD(0, 22);
+		PaddingLeft = UD(0, 12);
+		PaddingRight = UD(0, 10);
+		PaddingTop = UD(0, 8);
+		PaddingBottom = UD(0, 10);
 	})
 
-	local Title = Add("TextLabel", {
+	local TitleRow = Add("Frame", {
 		Parent = Body;
 		BackgroundTransparency = 1;
-		Size = UD2(1, -28, 0, 16);
+		Size = UD2(1, 0, 0, 16);
+	})
+	Add("TextLabel", {
+		Parent = TitleRow;
+		BackgroundTransparency = 1;
+		Size = UD2(1, -18, 1, 0);
 		FontFace = FN("rbxassetid://12187365364", FW.SemiBold, FS.Normal);
 		Text = Props.Title;
 		TextColor3 = TypeColor;
-		TextSize = 14;
+		TextSize = 12;
 		TextXAlignment = TXA.Left;
+		TextTransparency = 1;
+		Name = "Title";
 	})
-
 	local Close = Add("TextButton", {
-		Parent = Body;
-		AnchorPoint = V2(1, 0);
-		Position = UD2(1, 6, 0, -4);
-		Size = UFO(24, 24);
+		Parent = TitleRow;
+		AnchorPoint = V2(1, 0.5);
+		Position = UFS(1, 0.5);
+		Size = UFO(16, 16);
 		BackgroundTransparency = 1;
 		Text = "×";
-		TextColor3 = RGB(160, 160, 165);
-		TextSize = 20;
+		TextColor3 = RGB(140, 144, 155);
+		TextSize = 14;
 		FontFace = FN("rbxassetid://12187365364", FW.SemiBold, FS.Normal);
 		AutoButtonColor = false;
-		ZIndex = 4;
 	})
-	Close.MouseEnter:Connect(function()
-		Tween(Close, { TextColor3 = T.Text }, 0.15)
-	end)
-	Close.MouseLeave:Connect(function()
-		Tween(Close, { TextColor3 = RGB(160, 160, 165) }, 0.2)
-	end)
 
+	local ContentLabel = nil
 	if Content ~= "" then
-		Add("TextLabel", {
+		ContentLabel = Add("TextLabel", {
 			Parent = Body;
 			BackgroundTransparency = 1;
-			Position = UFO(0, 20);
+			Position = UFO(0, 18);
 			Size = UD2(1, 0, 0, 0);
 			AutomaticSize = AS.Y;
 			FontFace = FN("rbxassetid://12187365364", FW.SemiBold, FS.Normal);
 			Text = Content;
-			TextColor3 = RGB(160, 160, 165);
-			TextSize = 13;
-			TextTransparency = 0;
+			TextColor3 = RGB(160, 164, 175);
+			TextSize = 11;
 			TextWrapped = true;
 			TextXAlignment = TXA.Left;
 			TextYAlignment = TYA.Top;
+			TextTransparency = 1;
+			Name = "Body";
 		})
 	end
 
-	--@ progress bar
 	local BarBG = Add("Frame", {
 		Parent = Card;
 		AnchorPoint = V2(0, 1);
-		Position = UD2(0, 16, 1, -8);
-		Size = UD2(1, -32, 0, 3);
-		BackgroundColor3 = T.SurfaceAlt;
+		Position = UD2(0, 10, 1, -4);
+		Size = UD2(1, -20, 0, 2);
+		BackgroundColor3 = T.SurfaceAlt or RGB(20, 20, 21);
 		BorderSizePixel = 0;
-		ZIndex = 5;
+		ZIndex = 4;
 	})
 	Add("UICorner", { Parent = BarBG; CornerRadius = UD(1, 0); })
 	local Bar = Add("Frame", {
@@ -3516,14 +3492,19 @@ Library.Notify = function(propertyTable: {})
 
 	task.defer(function()
 		if Slot.Parent then
-			local H = math.max(Card.AbsoluteSize.Y, 56)
-			Tween(Slot, { Size = UD2(1, 0, 0, H) }, 0.3, ES.Quint)
+			local H = math.max(Card.AbsoluteSize.Y, 36)
+			Tween(Slot, { Size = UD2(1, 0, 0, H) }, 0.25, ES.Quint)
 		end
 	end)
 
-	Tween(Shell, { Position = UFO(0, 0) }, 0.5, ES.Back)
-	Tween(Card, { GroupTransparency = 0 }, 0.3)
-	Tween(Shadow, { ImageTransparency = 0.6 }, 0.4)
+	Tween(Shell, { Position = UFO(0, 0) }, 0.35, ES.Quint)
+	Tween(Card, { BackgroundTransparency = 0 }, 0.2)
+	Tween(CardStroke, { Transparency = 0 }, 0.2)
+	for _, D in Card:GetDescendants() do
+		if D:IsA("TextLabel") then
+			Tween(D, { TextTransparency = 0 }, 0.2)
+		end
+	end
 	Tween(Bar, { Size = UD2(0, 0, 1, 0) }, Duration, ES.Linear)
 
 	local Closed = false
@@ -3536,14 +3517,13 @@ Library.Notify = function(propertyTable: {})
 				break
 			end
 		end
-		Tween(Shell, { Position = UFO(320 * SlideDir, 0) }, 0.3, ES.Quint)
-		Tween(Card, { GroupTransparency = 1 }, 0.2)
+		Tween(Shell, { Position = UFO(260 * SlideDir, 0) }, 0.25, ES.Quint)
+		Tween(Card, { BackgroundTransparency = 1 }, 0.18)
 		Tween(CardStroke, { Transparency = 1 }, 0.15)
-		Tween(Shadow, { ImageTransparency = 1 }, 0.2)
-		task.delay(0.22, function()
+		task.delay(0.2, function()
 			Slot.ClipsDescendants = true
-			Tween(Slot, { Size = UD2(1, 0, 0, 0) }, 0.22, ES.Quint)
-			task.delay(0.24, function()
+			Tween(Slot, { Size = UD2(1, 0, 0, 0) }, 0.18, ES.Quint)
+			task.delay(0.2, function()
 				Slot:Destroy()
 			end)
 		end)
