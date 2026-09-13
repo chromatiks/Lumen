@@ -1,3 +1,4 @@
+-- LUMEN_BUILD 2026-09-13-c | fixed watermark string
 --[=[
            _,    _   _    ,_
       .o888P     Y8o8Y     Y888o.
@@ -2378,7 +2379,7 @@ Library.Window = function(self: Library, propertyTable: {})
 end
 
 
---@ ending · theme / config / menu / loading
+--@ ending - theme / config / menu / loading
 Library.Theme = {
 	Accent = RGB(138, 156, 229),
 	AccentDark = RGB(78, 88, 129),
@@ -3013,12 +3014,25 @@ Library.SetWatermark = function(Text: string?, Enabled: boolean?)
 	end
 
 	local CleanText = tostring(Library.Watermark.Text or "Lumen")
-	--@ strip non-ascii noise and trailing numeric ids
-	CleanText = CleanText:gsub("[^%w%s%-%_%.]", " ")
-	CleanText = CleanText:gsub("%s+%d%d%d%d%d+%s*", " ")
+	--@ keep letters, numbers, spaces, dashes only
+	local Built = {}
+	for i = 1, #CleanText do
+		local c = CleanText:sub(i, i)
+		local b = string.byte(c)
+		if (b >= 48 and b <= 57) or (b >= 65 and b <= 90) or (b >= 97 and b <= 122) or c == " " or c == "-" or c == "_" then
+			table.insert(Built, c)
+		else
+			table.insert(Built, " ")
+		end
+	end
+	CleanText = table.concat(Built)
 	CleanText = CleanText:gsub("%s+", " ")
 	CleanText = CleanText:gsub("^%s+", ""):gsub("%s+$", "")
-	if CleanText == "" or CleanText:match("^%d+$") then
+	if CleanText == "" then
+		CleanText = "Lumen"
+	end
+	--@ if the whole title is only digits, ignore it
+	if CleanText:match("^%d+$") then
 		CleanText = "Lumen"
 	end
 
@@ -3877,7 +3891,7 @@ Library.BuildConfigPage = function(self: Library, Window: any)
 		Width = 0.5;
 		Callback = function()
 			Library.ToggleMenu(false)
-			Library.Notify({ Title = "Lumen"; Text = "Menu hidden · press menu key"; Duration = 2 })
+			Library.Notify({ Title = "Lumen"; Text = "Menu hidden - press menu key"; Duration = 2 })
 		end;
 	})
 	MenuSection:Button({
