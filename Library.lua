@@ -1267,18 +1267,28 @@ Library.Elements.Dropdown = function(self: Library, propertyTable: {})
 	--@ dropdown state
 	local Buttons = {}
 
+	local function GetMultiValue(): { string }
+		if type(Dropdown.Value) ~= "table" then
+			return {}
+		end
+		return Dropdown.Value
+	end
+
 	local function IsSelected(Option: string): boolean
 		if Dropdown.Multi then
-			return TF(Dropdown.Value, Option) ~= nil
+			return TF(GetMultiValue(), Option) ~= nil
 		end
-
 		return Dropdown.Value == Option
 	end
 
 	local function Highlight()
 		for _, Button in Buttons do
 			local Selected = IsSelected(Button.Text)
-			Tween(Button, { BackgroundTransparency = Selected and 0 or 1; TextTransparency = Selected and 0.2 or 0.5 }, 0.1)
+			Tween(Button, {
+				BackgroundTransparency = Selected and 0 or 1;
+				TextTransparency = Selected and 0.15 or 0.45;
+				BackgroundColor3 = Selected and RGB(28, 30, 38) or RGB(20, 20, 21);
+			}, 0.1)
 		end
 	end
 
@@ -1290,8 +1300,7 @@ Library.Elements.Dropdown = function(self: Library, propertyTable: {})
 			return
 		end
 
-		--@ cloned so the caller's table is never mutated behind its back
-		local Selected = TC(Dropdown.Value)
+		local Selected = TC(GetMultiValue())
 		local Index = TF(Selected, Option)
 
 		if Index then
@@ -1361,6 +1370,18 @@ Library.Elements.Dropdown = function(self: Library, propertyTable: {})
 				BottomRightRadius = Last and UD(0, 5) or UD(0, 0);
 			})
 
+			Button.MouseEnter:Connect(function()
+				if not IsSelected(Option) then
+					Tween(Button, { BackgroundTransparency = 0.35; BackgroundColor3 = RGB(32, 34, 42) }, 0.08)
+				end
+			end)
+			Button.MouseLeave:Connect(function()
+				local Selected = IsSelected(Option)
+				Tween(Button, {
+					BackgroundTransparency = Selected and 0 or 1;
+					BackgroundColor3 = Selected and RGB(28, 30, 38) or RGB(20, 20, 21);
+				}, 0.08)
+			end)
 			Button.Activated:Connect(function()
 				Choose(Option)
 			end)
@@ -1372,16 +1393,25 @@ Library.Elements.Dropdown = function(self: Library, propertyTable: {})
 	end
 
 	Dropdown.Set = function(Value: string | { string })
-		Dropdown.Value = Value
-
 		if Dropdown.Multi then
+			if type(Value) ~= "table" then
+				Value = Value ~= nil and Value ~= "" and { tostring(Value) } or {}
+			end
+			Dropdown.Value = Value
 			InputText.Text = #Value > 0 and TCC(Value, ", ") or "None"
 		else
-			InputText.Text = Value
+			Dropdown.Value = Value
+			InputText.Text = tostring(Value or "")
+		end
+
+		if Dropdown.Flag then
+			Library.Flags[Dropdown.Flag] = Library.Flags[Dropdown.Flag] or {}
+			Library.Flags[Dropdown.Flag].Value = Dropdown.Value
+			Library.Flags[Dropdown.Flag].Set = Dropdown.Set
 		end
 
 		Highlight()
-		Dropdown.Callback(Value)
+		Dropdown.Callback(Dropdown.Value)
 	end
 
 	Dropdown.UpdateOptions = function(NewOptions: { string })
@@ -1391,8 +1421,8 @@ Library.Elements.Dropdown = function(self: Library, propertyTable: {})
 		--@ selections that no longer exist in the list have to be dropped
 		if Dropdown.Multi then
 			local Kept = {}
-
-			for _, Option in Dropdown.Value do
+			local Current = type(Dropdown.Value) == "table" and Dropdown.Value or {}
+			for _, Option in Current do
 				if TF(NewOptions, Option) then
 					TIS(Kept, Option)
 				end
@@ -1531,32 +1561,67 @@ Library.Elements.Button = function(self: Library, propertyTable: {})
 	local Button = Overwrite({
 		Name = "Button";
 		Callback = print;
-		Color = nil;
-		Height = 28;
+		Height = 30;
+		Width = 1; --@ 0–1 fraction of the section row (0.5 = half, sits beside the next half)
 	}, propertyTable or {})
 
+	local Width = typeof(Button.Width) == "number" and MC(Button.Width, 0.2, 1) or 1
+
+	local ParentFrame = self.Content
+	if Width < 0.999 then
+		if not self._ButtonRow or self._ButtonRowRemain < Width - 0.001 then
+			self._ButtonRow = Add("Frame", {
+				Parent = self.Content;
+				Name = "ButtonRow";
+				BackgroundTransparency = 1;
+				BorderSizePixel = 0;
+				Size = UD2(1, 0, 0, Button.Height);
+			})
+			Add("UIListLayout", {
+				Parent = self._ButtonRow;
+				FillDirection = FD.Horizontal;
+				Padding = UD(0, 8);
+				SortOrder = SO.LayoutOrder;
+			})
+			self._ButtonRowRemain = 1
+		end
+		ParentFrame = self._ButtonRow
+		self._ButtonRowRemain -= Width
+		if self._ButtonRowRemain <= 0.05 then
+			self._ButtonRow = nil
+			self._ButtonRowRemain = 0
+		end
+	else
+		self._ButtonRow = nil
+		self._ButtonRowRemain = 0
+	end
+
 	local Frame = Add("Frame", {
-		Parent = self.Content;
+		Parent = ParentFrame;
 		Name = "ButtonFrame";
 		BackgroundTransparency = 1;
 		BorderSizePixel = 0;
-		Size = UD2(1, 0, 0, Button.Height);
+		Size = UD2(Width, Width < 1 and -4 or 0, 1, 0);
 	})
+	if Width >= 0.999 then
+		Frame.Size = UD2(1, 0, 0, Button.Height)
+	end
+
 	local Click = Add("TextButton", {
 		Parent = Frame;
 		Name = "Click";
 		AutoButtonColor = false;
-		BackgroundColor3 = RGB(20, 20, 21);
+		BackgroundColor3 = RGB(22, 22, 24);
 		BorderSizePixel = 0;
 		FontFace = FN("rbxassetid://12187365364", FW.SemiBold, FS.Normal);
 		Size = UFS(1, 1);
 		Text = Button.Name;
 		TextColor3 = RGB(255, 255, 255);
 		TextSize = 13;
-		TextTransparency = 0.1;
+		TextTransparency = 0.12;
 	})
-	Add("UICorner", { Parent = Click; CornerRadius = UD(0, 5); })
-	Add("UIStroke", { Parent = Click; ApplyStrokeMode = ASM.Border; Color = RGB(36, 37, 37); })
+	Add("UICorner", { Parent = Click; CornerRadius = UD(0, 6); })
+	Add("UIStroke", { Parent = Click; ApplyStrokeMode = ASM.Border; Color = RGB(40, 41, 46); })
 	local Grad = Add("UIGradient", {
 		Parent = Click;
 		Color = CS{ CSK(0, RGB(78, 88, 129)), CSK(1, RGB(138, 156, 229)) };
@@ -1566,11 +1631,11 @@ Library.Elements.Button = function(self: Library, propertyTable: {})
 
 	Click.MouseEnter:Connect(function()
 		Grad.Enabled = true
-		Tween(Click, { BackgroundColor3 = RGB(255, 255, 255); TextColor3 = RGB(0, 0, 0); TextTransparency = 0 }, 0.12)
+		Tween(Click, { BackgroundColor3 = RGB(255, 255, 255); TextColor3 = RGB(12, 12, 14); TextTransparency = 0 }, 0.12)
 	end)
 	Click.MouseLeave:Connect(function()
 		Grad.Enabled = false
-		Tween(Click, { BackgroundColor3 = RGB(20, 20, 21); TextColor3 = RGB(255, 255, 255); TextTransparency = 0.1 }, 0.12)
+		Tween(Click, { BackgroundColor3 = RGB(22, 22, 24); TextColor3 = RGB(255, 255, 255); TextTransparency = 0.12 }, 0.12)
 	end)
 	Click.Activated:Connect(function()
 		Button.Callback()
@@ -1750,7 +1815,7 @@ Library.SubElements.Keybind = function(self: Library, propertyTable: {})
 		Keybind.Key = Key
 		KeyButton.Text = Format(Key)
 		local Title = Keybind.Title ~= "" and Keybind.Title or (self.Text or "Keybind")
-		Library.UpdateKeybindList(Title, Format(Key), Keybind.State)
+		Library.UpdateKeybindList(Title, Format(Key), Keybind.State, Keybind.Type)
 	end
 
 	Keybind.SetType = function(Type: string)
@@ -1865,7 +1930,7 @@ Library.SubElements.Keybind = function(self: Library, propertyTable: {})
 
 		Keybind.State = Keybind.Type == "Hold" or not Keybind.State
 		local Title = Keybind.Title ~= "" and Keybind.Title or (self.Text or "Keybind")
-		Library.UpdateKeybindList(Title, Format(Keybind.Key), Keybind.State)
+		Library.UpdateKeybindList(Title, Format(Keybind.Key), Keybind.State, Keybind.Type)
 		Keybind.Callback(Keybind.State)
 	end)
 
@@ -2166,7 +2231,7 @@ Library.Window = function(self: Library, propertyTable: {})
 		local PageButton = Add("TextButton", { Parent = PageButtons; Name = "PageButton"; AutoButtonColor = false; BackgroundColor3 = RGB(255, 255, 255); BackgroundTransparency = 1; BorderColor3 = RGB(0, 0, 0); BorderSizePixel = 0; FontFace = FN("rbxasset://fonts/families/SourceSansPro.json", FW.Regular, FS.Normal); Size = UFO(45, 45); Text = ""; TextColor3 = RGB(0, 0, 0); TextSize = 14; }) :: TextButton
 		Add("UICorner", { Parent = PageButton; CornerRadius = UD(1, 0); })
 		Add("UIGradient", { Parent = PageButton; Color = CS{ CSK(0, RGB(81, 91, 129)), CSK(1, RGB(127, 142, 202)) }; Rotation = -70; })
-		local PageIcon = Add("ImageLabel", { Parent = PageButton; BackgroundColor3 = RGB(255, 255, 255); BackgroundTransparency = 1; BorderColor3 = RGB(0, 0, 0); BorderSizePixel = 0; Image = ResolveIcon(Page.Icon); ImageTransparency = 0.5; ResampleMode = Enum.ResamplerMode.Pixelated; Size = UFS(1, 1); }) :: ImageLabel
+		local PageIcon = Add("ImageLabel", { Parent = PageButton; BackgroundColor3 = RGB(255, 255, 255); BackgroundTransparency = 1; BorderColor3 = RGB(0, 0, 0); BorderSizePixel = 0; Image = ResolveIcon(Page.Icon); ImageTransparency = 0.5; ScaleType = SCL.Fit; Size = UFS(1, 1); }) :: ImageLabel
 		Add("UIPadding", { Parent = PageButton; PaddingBottom = UD(0, 12); PaddingLeft = UD(0, 12); PaddingRight = UD(0, 12); PaddingTop = UD(0, 12); })
 
 		--@ a page's own trigger styling, layered on top of the shared frame/slide/Section
@@ -2288,9 +2353,15 @@ Library.MenuKey = EKC.LeftAlt
 Library.MenuOpen = true
 Library.Windows = {}
 
+local function HasFS(): boolean
+	return typeof(writefile) == "function" and typeof(readfile) == "function"
+end
+
 local function EnsureFolder()
-	if isfolder and not isfolder(Library.Folder) then
-		makefolder(Library.Folder)
+	if typeof(isfolder) == "function" and typeof(makefolder) == "function" then
+		if not isfolder(Library.Folder) then
+			pcall(makefolder, Library.Folder)
+		end
 	end
 end
 
@@ -2407,11 +2478,13 @@ Library.LoadConfigData = function(Data: {})
 end
 
 Library.SaveConfig = function(Name: string)
-	if not writefile then
-		warn("[Lumen] writefile is unavailable")
+	if not HasFS() then
+		warn("[Lumen] writefile/readfile unavailable in this environment")
 		return false
 	end
 	EnsureFolder()
+	Name = tostring(Name or "default"):gsub("[^%w%-%_ ]", "")
+	if Name == "" then Name = "default" end
 	local Data = Library.GetConfig()
 	Data.Name = Name
 	Data.SavedAt = os.date("%Y-%m-%d %H:%M:%S")
@@ -2422,21 +2495,35 @@ Library.SaveConfig = function(Name: string)
 		warn("[Lumen] failed to encode config", Encoded)
 		return false
 	end
-	writefile(ConfigPath(Name), Encoded)
+	local Path = ConfigPath(Name)
+	local WOk, WErr = pcall(writefile, Path, Encoded)
+	if not WOk then
+		warn("[Lumen] writefile failed", WErr)
+		return false
+	end
 	return true
 end
 
 Library.LoadConfig = function(Name: string)
-	if not readfile or not isfile then
-		warn("[Lumen] readfile is unavailable")
+	if not HasFS() then
+		warn("[Lumen] writefile/readfile unavailable in this environment")
 		return false
 	end
+	Name = tostring(Name or "default")
 	local Path = ConfigPath(Name)
-	if not isfile(Path) then
+	local Exists = true
+	if typeof(isfile) == "function" then
+		Exists = isfile(Path)
+	end
+	if not Exists then
 		warn("[Lumen] config not found:", Name)
 		return false
 	end
-	local Raw = readfile(Path)
+	local ROk, Raw = pcall(readfile, Path)
+	if not ROk then
+		warn("[Lumen] readfile failed", Raw)
+		return false
+	end
 	local Ok, Data = pcall(function()
 		return game:GetService("HttpService"):JSONDecode(Raw)
 	end)
@@ -2581,12 +2668,24 @@ Library.LoadingScreen = function(self: Library, propertyTable: {})
 
 	Tween(Bar, { Size = UD2(1, 0, 1, 0) }, Props.Duration, ES.Quad, ED.Out)
 
+	local Done = Instance.new("BindableEvent")
 	task.delay(Props.Duration + 0.15, function()
 		Tween(Card, { BackgroundTransparency = 1 }, 0.3)
+		for _, D in Card:GetDescendants() do
+			if D:IsA("TextLabel") then
+				Tween(D, { TextTransparency = 1 }, 0.25)
+			elseif D:IsA("Frame") and D ~= Card then
+				Tween(D, { BackgroundTransparency = 1 }, 0.25)
+			end
+		end
 		task.wait(0.35)
 		Gui:Destroy()
+		Done:Fire()
 	end)
 
+	--@ yield until finished so the menu is only built after
+	Done.Event:Wait()
+	Done:Destroy()
 	return Gui
 end
 
@@ -2631,6 +2730,9 @@ local function EnsureOverlayGui()
 	return Library._Overlay
 end
 
+Library.NotifyPosition = "Top Right" -- Top Left, Top Right, Bottom Left, Bottom Right
+Library.Notifications = {}
+
 Library.SetWatermark = function(Text: string?, Enabled: boolean?)
 	if Enabled ~= nil then
 		Library.Watermark.Enabled = Enabled
@@ -2640,55 +2742,106 @@ Library.SetWatermark = function(Text: string?, Enabled: boolean?)
 	end
 
 	local Gui = EnsureOverlayGui()
-	if not Library.Watermark.Frame then
-		local Frame = Add("Frame", {
-			Parent = Gui;
-			Name = "Watermark";
-			AnchorPoint = V2(0.5, 0);
-			Position = UD2(0.5, 0, 0, 12);
-			AutomaticSize = AS.X;
-			Size = UFO(0, 28);
-			BackgroundColor3 = Library.Theme.Surface;
-			BorderSizePixel = 0;
-			ZIndex = 100;
-		})
-		Add("UICorner", { Parent = Frame; CornerRadius = UD(0, 6); })
-		Add("UIStroke", { Parent = Frame; ApplyStrokeMode = ASM.Border; Color = Library.Theme.Border; })
-		Add("UIPadding", { Parent = Frame; PaddingLeft = UD(0, 12); PaddingRight = UD(0, 12); })
-		Add("UIListLayout", {
-			Parent = Frame;
-			FillDirection = FD.Horizontal;
-			Padding = UD(0, 8);
-			VerticalAlignment = VFA.Center;
-			HorizontalAlignment = HFA.Center;
-		})
-		local Accent = Add("Frame", {
-			Parent = Frame;
-			BackgroundColor3 = Library.Theme.Accent;
-			BorderSizePixel = 0;
-			Size = UFO(3, 14);
-			LayoutOrder = 0;
-		})
-		Add("UICorner", { Parent = Accent; CornerRadius = UD(1, 0); })
-		local Label = Add("TextLabel", {
-			Parent = Frame;
-			Name = "Label";
-			BackgroundTransparency = 1;
-			AutomaticSize = AS.X;
-			Size = UFO(0, 28);
-			FontFace = FN("rbxassetid://12187365364", FW.SemiBold, FS.Normal);
-			Text = Library.Watermark.Text;
-			TextColor3 = Library.Theme.Text;
-			TextSize = 13;
-			LayoutOrder = 1;
-		})
-		Library.Watermark.Frame = Frame
-		Library.Watermark.Label = Label
-		Library.Watermark.Accent = Accent
+	if Library.Watermark.Frame then
+		Library.Watermark.Frame:Destroy()
+		Library.Watermark.Frame = nil
 	end
 
-	Library.Watermark.Label.Text = Library.Watermark.Text
-	Library.Watermark.Frame.Visible = Library.Watermark.Enabled == true
+	local Frame = Add("Frame", {
+		Parent = Gui;
+		Name = "Watermark";
+		AnchorPoint = V2(0.5, 0);
+		Position = UD2(0.5, 0, 0, 14);
+		AutomaticSize = AS.X;
+		Size = UFO(0, 30);
+		BackgroundColor3 = RGB(18, 18, 20);
+		BorderSizePixel = 0;
+		ZIndex = 120;
+		Visible = Library.Watermark.Enabled == true;
+	})
+	Add("UICorner", { Parent = Frame; CornerRadius = UD(0, 8); })
+	Add("UIStroke", { Parent = Frame; ApplyStrokeMode = ASM.Border; Color = RGB(40, 42, 48); })
+	Add("UIPadding", { Parent = Frame; PaddingLeft = UD(0, 10); PaddingRight = UD(0, 12); })
+	Add("UIListLayout", {
+		Parent = Frame;
+		FillDirection = FD.Horizontal;
+		Padding = UD(0, 8);
+		VerticalAlignment = VFA.Center;
+		SortOrder = SO.LayoutOrder;
+	})
+
+	local Logo = Add("Frame", {
+		Parent = Frame;
+		BackgroundColor3 = Library.Theme.Accent;
+		BorderSizePixel = 0;
+		Size = UFO(14, 14);
+		LayoutOrder = 0;
+	})
+	Add("UICorner", { Parent = Logo; CornerRadius = UD(1, 0); })
+	Add("UIGradient", {
+		Parent = Logo;
+		Color = CS{ CSK(0, Library.Theme.AccentDark), CSK(1, Library.Theme.Accent) };
+		Rotation = 45;
+	})
+
+	local Label = Add("TextLabel", {
+		Parent = Frame;
+		Name = "Label";
+		BackgroundTransparency = 1;
+		AutomaticSize = AS.X;
+		Size = UFO(0, 30);
+		FontFace = FN("rbxassetid://12187365364", FW.SemiBold, FS.Normal);
+		Text = Library.Watermark.Text;
+		TextColor3 = RGB(235, 236, 240);
+		TextSize = 13;
+		LayoutOrder = 1;
+	})
+
+	local Sep = Add("TextLabel", {
+		Parent = Frame;
+		BackgroundTransparency = 1;
+		AutomaticSize = AS.X;
+		Size = UFO(0, 30);
+		FontFace = FN("rbxassetid://12187365364", FW.SemiBold, FS.Normal);
+		Text = "·";
+		TextColor3 = RGB(120, 124, 140);
+		TextSize = 13;
+		LayoutOrder = 2;
+	})
+
+	local Stats = Add("TextLabel", {
+		Parent = Frame;
+		Name = "Stats";
+		BackgroundTransparency = 1;
+		AutomaticSize = AS.X;
+		Size = UFO(0, 30);
+		FontFace = FN("rbxassetid://12187365364", FW.SemiBold, FS.Normal);
+		Text = "0 fps";
+		TextColor3 = RGB(160, 164, 180);
+		TextSize = 12;
+		LayoutOrder = 3;
+	})
+
+	Library.Watermark.Frame = Frame
+	Library.Watermark.Label = Label
+	Library.Watermark.Stats = Stats
+	Library.Watermark.Accent = Logo
+
+	if not Library.Watermark._StatsConn then
+		local Frames = 0
+		local Last = os.clock()
+		Library.Watermark._StatsConn = RunService.RenderStepped:Connect(function()
+			Frames += 1
+			local Now = os.clock()
+			if Now - Last >= 1 then
+				if Library.Watermark.Stats then
+					Library.Watermark.Stats.Text = string.format("%d fps", Frames)
+				end
+				Frames = 0
+				Last = Now
+			end
+		end)
+	end
 end
 
 Library.SetKeybindList = function(Enabled: boolean?)
@@ -2697,99 +2850,318 @@ Library.SetKeybindList = function(Enabled: boolean?)
 	end
 
 	local Gui = EnsureOverlayGui()
-	if not Library.KeybindList.Frame then
-		local Frame = Add("Frame", {
-			Parent = Gui;
-			Name = "KeybindList";
-			Position = UFO(12, 12);
-			AutomaticSize = AS.XY;
-			BackgroundColor3 = Library.Theme.Surface;
-			BorderSizePixel = 0;
-			ZIndex = 100;
-		})
-		Add("UICorner", { Parent = Frame; CornerRadius = UD(0, 6); })
-		Add("UIStroke", { Parent = Frame; ApplyStrokeMode = ASM.Border; Color = Library.Theme.Border; })
-		Add("UIPadding", {
-			Parent = Frame;
-			PaddingLeft = UD(0, 10);
-			PaddingRight = UD(0, 10);
-			PaddingTop = UD(0, 8);
-			PaddingBottom = UD(0, 8);
-		})
-		Add("UIListLayout", { Parent = Frame; Padding = UD(0, 4); SortOrder = SO.LayoutOrder; })
-		local Title = Add("TextLabel", {
-			Parent = Frame;
-			BackgroundTransparency = 1;
-			Size = UD2(1, 0, 0, 16);
-			FontFace = FN("rbxassetid://12187365364", FW.SemiBold, FS.Normal);
-			Text = "Keybinds";
-			TextColor3 = Library.Theme.Text;
-			TextTransparency = 0.2;
-			TextSize = 12;
-			TextXAlignment = TXA.Left;
-			LayoutOrder = -1;
-		})
-		Library.KeybindList.Frame = Frame
-		Library.KeybindList.Title = Title
+	if Library.KeybindList.Frame then
+		Library.KeybindList.Frame:Destroy()
+		Library.KeybindList.Frame = nil
 		Library.KeybindList.Rows = {}
 	end
 
-	Library.KeybindList.Frame.Visible = Library.KeybindList.Enabled == true
+	local Frame = Add("Frame", {
+		Parent = Gui;
+		Name = "KeybindList";
+		Position = UFO(16, 16);
+		AutomaticSize = AS.XY;
+		BackgroundColor3 = RGB(18, 18, 20);
+		BorderSizePixel = 0;
+		ZIndex = 120;
+		Visible = Library.KeybindList.Enabled == true;
+	})
+	Add("UICorner", { Parent = Frame; CornerRadius = UD(0, 10); })
+	Add("UIStroke", { Parent = Frame; ApplyStrokeMode = ASM.Border; Color = RGB(40, 42, 48); })
+	Add("UIPadding", {
+		Parent = Frame;
+		PaddingLeft = UD(0, 12);
+		PaddingRight = UD(0, 12);
+		PaddingTop = UD(0, 10);
+		PaddingBottom = UD(0, 10);
+	})
+	Add("UIListLayout", { Parent = Frame; Padding = UD(0, 6); SortOrder = SO.LayoutOrder; })
+
+	local Header = Add("Frame", {
+		Parent = Frame;
+		BackgroundTransparency = 1;
+		Size = UD2(1, 0, 0, 20);
+		LayoutOrder = -2;
+	})
+	Add("UIListLayout", {
+		Parent = Header;
+		FillDirection = FD.Horizontal;
+		Padding = UD(0, 8);
+		VerticalAlignment = VFA.Center;
+	})
+	local Dot = Add("Frame", {
+		Parent = Header;
+		BackgroundColor3 = Library.Theme.Accent;
+		Size = UFO(8, 8);
+		BorderSizePixel = 0;
+	})
+	Add("UICorner", { Parent = Dot; CornerRadius = UD(1, 0); })
+	Add("TextLabel", {
+		Parent = Header;
+		BackgroundTransparency = 1;
+		AutomaticSize = AS.X;
+		Size = UFO(0, 20);
+		FontFace = FN("rbxassetid://12187365364", FW.SemiBold, FS.Normal);
+		Text = "Keybind list";
+		TextColor3 = RGB(235, 236, 240);
+		TextSize = 13;
+	})
+
+	local Cols = Add("Frame", {
+		Parent = Frame;
+		BackgroundTransparency = 1;
+		Size = UFO(220, 16);
+		LayoutOrder = -1;
+	})
+	Add("UIListLayout", {
+		Parent = Cols;
+		FillDirection = FD.Horizontal;
+		HorizontalFlex = UFA.Fill;
+		VerticalAlignment = VFA.Center;
+	})
+	for _, Title in { "Function", "Hotkey", "Status" } do
+		Add("TextLabel", {
+			Parent = Cols;
+			BackgroundTransparency = 1;
+			Size = UFS(0.33, 1);
+			FontFace = FN("rbxassetid://12187365364", FW.SemiBold, FS.Normal);
+			Text = Title;
+			TextColor3 = RGB(120, 124, 140);
+			TextSize = 11;
+			TextXAlignment = TXA.Left;
+		})
+	end
+
+	Library.KeybindList.Frame = Frame
+	Library.KeybindList.Rows = {}
+	Library.KeybindList.Accent = Dot
 end
 
-Library.UpdateKeybindList = function(Name: string, KeyText: string, Active: boolean?)
+Library.UpdateKeybindList = function(Name: string, KeyText: string, Active: boolean?, Mode: string?)
 	if not Library.KeybindList.Frame then
 		Library.SetKeybindList(Library.KeybindList.Enabled)
 	end
+	if not Library.KeybindList.Enabled then
+		return
+	end
+
+	Mode = Mode or "Toggle"
 	local Rows = Library.KeybindList.Rows
 	local Row = Rows[Name]
 	if not Row then
 		Row = Add("Frame", {
 			Parent = Library.KeybindList.Frame;
+			BackgroundColor3 = RGB(28, 28, 32);
 			BackgroundTransparency = 1;
-			Size = UD2(1, 0, 0, 16);
-			AutomaticSize = AS.X;
+			Size = UFO(220, 22);
+			BorderSizePixel = 0;
 		})
+		Add("UICorner", { Parent = Row; CornerRadius = UD(0, 5); })
 		Add("UIListLayout", {
 			Parent = Row;
 			FillDirection = FD.Horizontal;
-			Padding = UD(0, 12);
-			HorizontalAlignment = HFA.Left;
+			HorizontalFlex = UFA.Fill;
+			VerticalAlignment = VFA.Center;
+			Padding = UD(0, 4);
 		})
+		Add("UIPadding", { Parent = Row; PaddingLeft = UD(0, 6); PaddingRight = UD(0, 6); })
 		local N = Add("TextLabel", {
 			Parent = Row;
 			Name = "Name";
 			BackgroundTransparency = 1;
-			AutomaticSize = AS.X;
-			Size = UFO(0, 16);
+			Size = UFS(0.4, 1);
 			FontFace = FN("rbxassetid://12187365364", FW.SemiBold, FS.Normal);
 			Text = Name;
-			TextColor3 = Library.Theme.Text;
-			TextTransparency = 0.35;
+			TextColor3 = RGB(210, 212, 220);
 			TextSize = 12;
+			TextXAlignment = TXA.Left;
+			TextTruncate = ETT.AtEnd;
 		})
 		local K = Add("TextLabel", {
 			Parent = Row;
 			Name = "Key";
 			BackgroundTransparency = 1;
-			AutomaticSize = AS.X;
-			Size = UFO(0, 16);
+			Size = UFS(0.3, 1);
 			FontFace = FN("rbxassetid://12187365364", FW.SemiBold, FS.Normal);
 			Text = KeyText;
-			TextColor3 = Library.Theme.Accent;
+			TextColor3 = RGB(200, 204, 220);
 			TextSize = 12;
+			TextXAlignment = TXA.Left;
+		})
+		local S = Add("TextLabel", {
+			Parent = Row;
+			Name = "Status";
+			BackgroundTransparency = 1;
+			Size = UFS(0.3, 1);
+			FontFace = FN("rbxassetid://12187365364", FW.SemiBold, FS.Normal);
+			Text = Mode;
+			TextColor3 = RGB(140, 144, 160);
+			TextSize = 12;
+			TextXAlignment = TXA.Left;
 		})
 		Rows[Name] = Row
 	end
+
 	local KeyLabel = Row:FindFirstChild("Key")
+	local StatusLabel = Row:FindFirstChild("Status")
 	local NameLabel = Row:FindFirstChild("Name")
-	if KeyLabel then
-		KeyLabel.Text = KeyText
-		KeyLabel.TextColor3 = Active and Library.Theme.Accent or RGB(180, 185, 200)
+	if KeyLabel then KeyLabel.Text = KeyText or "None" end
+	if StatusLabel then StatusLabel.Text = Mode end
+	if Active then
+		Tween(Row, { BackgroundTransparency = 0 }, 0.12)
+		if NameLabel then NameLabel.TextTransparency = 0 end
+	else
+		Tween(Row, { BackgroundTransparency = 1 }, 0.12)
+		if NameLabel then NameLabel.TextTransparency = 0.15 end
 	end
-	if NameLabel then
-		NameLabel.TextTransparency = Active and 0.1 or 0.35
+end
+
+local function NotifyAnchor(): (Vector2, Vector2)
+	local Pos = Library.NotifyPosition or "Top Right"
+	local Cam = workspace.CurrentCamera
+	local VP = Cam and Cam.ViewportSize or V2(1920, 1080)
+	local Pad = 16
+	if Pos == "Top Left" then
+		return V2(0, 0), V2(Pad, Pad)
+	elseif Pos == "Bottom Left" then
+		return V2(0, 1), V2(Pad, -Pad)
+	elseif Pos == "Bottom Right" then
+		return V2(1, 1), V2(-Pad, -Pad)
 	end
+	return V2(1, 0), V2(-Pad, Pad) -- Top Right
+end
+
+Library.Notify = function(propertyTable: {})
+	local Props = Overwrite({
+		Title = "Lumen";
+		Text = "";
+		Duration = 3;
+		Type = "Info"; -- Info / Success / Warn / Error
+	}, propertyTable or {})
+
+	local Gui = EnsureOverlayGui()
+	if not Library._NotifyHost then
+		Library._NotifyHost = Add("Frame", {
+			Parent = Gui;
+			Name = "Notifications";
+			BackgroundTransparency = 1;
+			Size = UFO(300, 0);
+			AutomaticSize = AS.Y;
+			ZIndex = 200;
+		})
+		Add("UIListLayout", {
+			Parent = Library._NotifyHost;
+			Padding = UD(0, 8);
+			SortOrder = SO.LayoutOrder;
+			HorizontalAlignment = HFA.Right;
+		})
+	end
+
+	local Anchor, Offset = NotifyAnchor()
+	Library._NotifyHost.AnchorPoint = Anchor
+	Library._NotifyHost.Position = UFO(Offset.X < 0 and workspace.CurrentCamera.ViewportSize.X + Offset.X or Offset.X, Offset.Y < 0 and workspace.CurrentCamera.ViewportSize.Y + Offset.Y or Offset.Y)
+	--@ simpler placement via UDim2 scale
+	local Pos = Library.NotifyPosition or "Top Right"
+	if Pos == "Top Left" then
+		Library._NotifyHost.AnchorPoint = V2(0, 0)
+		Library._NotifyHost.Position = UFO(16, 16)
+		Library._NotifyHost:FindFirstChildOfClass("UIListLayout").HorizontalAlignment = HFA.Left
+	elseif Pos == "Bottom Left" then
+		Library._NotifyHost.AnchorPoint = V2(0, 1)
+		Library._NotifyHost.Position = UD2(0, 16, 1, -16)
+		Library._NotifyHost:FindFirstChildOfClass("UIListLayout").HorizontalAlignment = HFA.Left
+	elseif Pos == "Bottom Right" then
+		Library._NotifyHost.AnchorPoint = V2(1, 1)
+		Library._NotifyHost.Position = UD2(1, -16, 1, -16)
+		Library._NotifyHost:FindFirstChildOfClass("UIListLayout").HorizontalAlignment = HFA.Right
+	else
+		Library._NotifyHost.AnchorPoint = V2(1, 0)
+		Library._NotifyHost.Position = UD2(1, -16, 0, 16)
+		Library._NotifyHost:FindFirstChildOfClass("UIListLayout").HorizontalAlignment = HFA.Right
+	end
+
+	local Accent = Library.Theme.Accent
+	if Props.Type == "Success" then Accent = RGB(80, 200, 120)
+	elseif Props.Type == "Warn" then Accent = RGB(230, 180, 60)
+	elseif Props.Type == "Error" then Accent = RGB(230, 80, 90) end
+
+	local Card = Add("Frame", {
+		Parent = Library._NotifyHost;
+		AutomaticSize = AS.Y;
+		Size = UFO(280, 0);
+		BackgroundColor3 = RGB(18, 18, 20);
+		BorderSizePixel = 0;
+		ZIndex = 201;
+	})
+	Add("UICorner", { Parent = Card; CornerRadius = UD(0, 8); })
+	Add("UIStroke", { Parent = Card; ApplyStrokeMode = ASM.Border; Color = RGB(40, 42, 48); })
+	local Bar = Add("Frame", {
+		Parent = Card;
+		BackgroundColor3 = Accent;
+		BorderSizePixel = 0;
+		Size = UD2(0, 3, 1, 0);
+	})
+	Add("UICorner", { Parent = Bar; CornerRadius = UD(0, 2); })
+	Add("UIPadding", {
+		Parent = Card;
+		PaddingLeft = UD(0, 14);
+		PaddingRight = UD(0, 12);
+		PaddingTop = UD(0, 10);
+		PaddingBottom = UD(0, 10);
+	})
+	Add("TextLabel", {
+		Parent = Card;
+		BackgroundTransparency = 1;
+		Size = UD2(1, 0, 0, 16);
+		FontFace = FN("rbxassetid://12187365364", FW.SemiBold, FS.Normal);
+		Text = Props.Title;
+		TextColor3 = RGB(235, 236, 240);
+		TextSize = 13;
+		TextXAlignment = TXA.Left;
+	})
+	if Props.Text ~= "" then
+		Add("TextLabel", {
+			Parent = Card;
+			BackgroundTransparency = 1;
+			Position = UFO(0, 18);
+			AutomaticSize = AS.Y;
+			Size = UD2(1, 0, 0, 0);
+			FontFace = FN("rbxassetid://12187365364", FW.SemiBold, FS.Normal);
+			Text = Props.Text;
+			TextColor3 = RGB(160, 164, 180);
+			TextSize = 12;
+			TextWrapped = true;
+			TextXAlignment = TXA.Left;
+		})
+	end
+
+	Card.BackgroundTransparency = 1
+	Tween(Card, { BackgroundTransparency = 0 }, 0.2)
+	task.delay(Props.Duration, function()
+		if Card and Card.Parent then
+			Tween(Card, { BackgroundTransparency = 1 }, 0.25)
+			task.wait(0.25)
+			Card:Destroy()
+		end
+	end)
+	return Card
+end
+
+Library.Unload = function()
+	Library.ToggleMenu(false)
+	if Library.Watermark.Frame then Library.Watermark.Frame.Visible = false end
+	if Library.KeybindList.Frame then Library.KeybindList.Frame.Visible = false end
+	if Library._NotifyHost then Library._NotifyHost.Visible = false end
+	for _, Win in Library.Windows do
+		if Win.Canvas then
+			Win.Canvas:Destroy()
+		end
+	end
+	table.clear(Library.Windows)
+	if Library._Instance then
+		Library._Instance:Destroy()
+	end
+	Library.Notify({ Title = "Lumen"; Text = "Unloaded"; Duration = 2 })
 end
 
 Library.ToggleMenu = function(State: boolean?)
@@ -2888,32 +3260,39 @@ Library.BuildConfigPage = function(self: Library, Window: any)
 
 	ListSection:Button({
 		Name = "Load";
+		Width = 0.5;
 		Callback = function()
 			local Name = CurrentName()
 			if Library.LoadConfig(Name) then
 				Selected.Name = Name
 				SetStatus("Loaded · " .. Name)
 				Meta.SetBody("Autoload: " .. tostring(Library.GetAutoload() == Name) .. "\nTheme & flags applied")
+				Library.Notify({ Title = "Config"; Text = "Loaded " .. Name; Type = "Success" })
 			else
 				SetStatus("Failed to load · " .. Name)
+				Library.Notify({ Title = "Config"; Text = "Failed to load " .. Name; Type = "Error" })
 			end
 		end;
 	})
 	ListSection:Button({
 		Name = "Save";
+		Width = 0.5;
 		Callback = function()
 			local Name = CurrentName()
 			if Library.SaveConfig(Name) then
 				Selected.Name = Name
 				ReloadList()
 				SetStatus("Saved · " .. Name)
+				Library.Notify({ Title = "Config"; Text = "Saved " .. Name; Type = "Success" })
 			else
 				SetStatus("Save failed (writefile?)")
+				Library.Notify({ Title = "Config"; Text = "Save failed — executor FS?"; Type = "Error" })
 			end
 		end;
 	})
 	ListSection:Button({
 		Name = "Overwrite";
+		Width = 0.5;
 		Callback = function()
 			local Name = CurrentName()
 			if Library.SaveConfig(Name) then
@@ -2924,6 +3303,7 @@ Library.BuildConfigPage = function(self: Library, Window: any)
 	})
 	ListSection:Button({
 		Name = "Set autoload";
+		Width = 0.5;
 		Callback = function()
 			local Name = CurrentName()
 			Library.SetAutoload(Name)
@@ -2933,6 +3313,7 @@ Library.BuildConfigPage = function(self: Library, Window: any)
 	})
 	ListSection:Button({
 		Name = "Delete";
+		Width = 0.5;
 		Callback = function()
 			local Name = CurrentName()
 			Library.DeleteConfig(Name)
@@ -2942,6 +3323,7 @@ Library.BuildConfigPage = function(self: Library, Window: any)
 	})
 	ListSection:Button({
 		Name = "Refresh list";
+		Width = 0.5;
 		Height = 26;
 		Callback = function()
 			ReloadList()
@@ -2985,17 +3367,28 @@ Library.BuildConfigPage = function(self: Library, Window: any)
 		end;
 	})
 
-	MenuSection:Dropdown({
-		Name = "Menu key";
-		Options = { "LeftAlt", "RightAlt", "LeftControl", "RightControl", "RightShift", "Insert", "Delete" };
-		Value = Library.MenuKey.Name;
-		Flag = "MenuKeyName";
-		Callback = function(Name)
-			if EKC[Name] then
-				Library.MenuKey = EKC[Name]
-			end
+	local MenuKeyLabel = MenuSection:Label({ Text = "Menu key" })
+	MenuKeyLabel:Keybind({
+		Title = "Menu";
+		Key = Library.MenuKey;
+		Type = "Toggle";
+		Flag = "MenuKeybind";
+		Callback = function()
+			--@ actual toggle is handled globally; this only stores the key
 		end;
 	})
+	--@ keep MenuKey in sync when rebound
+	task.defer(function()
+		local Flag = Library.Flags["MenuKeybind"]
+		if Flag then
+			local OldSet = Flag.Set
+			Flag.Set = function(Key)
+				if OldSet then OldSet(Key) end
+				if Key then Library.MenuKey = Key end
+			end
+		end
+	end)
+
 	MenuSection:Slider({
 		Name = "UI scale";
 		Suffix = "%";
@@ -3006,6 +3399,15 @@ Library.BuildConfigPage = function(self: Library, Window: any)
 		Flag = "UIScale";
 		Callback = function(Value)
 			Library.SetScale(Value / 100)
+		end;
+	})
+	MenuSection:Dropdown({
+		Name = "Notification position";
+		Options = { "Top Left", "Top Right", "Bottom Left", "Bottom Right" };
+		Value = Library.NotifyPosition;
+		Flag = "NotifyPosition";
+		Callback = function(Value)
+			Library.NotifyPosition = Value
 		end;
 	})
 	local WM = MenuSection:Label({ Text = "Watermark" })
@@ -3026,8 +3428,17 @@ Library.BuildConfigPage = function(self: Library, Window: any)
 	})
 	MenuSection:Button({
 		Name = "Hide menu";
+		Width = 0.5;
 		Callback = function()
 			Library.ToggleMenu(false)
+			Library.Notify({ Title = "Lumen"; Text = "Menu hidden · press menu key"; Duration = 2 })
+		end;
+	})
+	MenuSection:Button({
+		Name = "Unload";
+		Width = 0.5;
+		Callback = function()
+			Library.Unload()
 		end;
 	})
 
