@@ -803,10 +803,43 @@ end
 --@ styling on top without duplicating the frame, slide animation, or mutual exclusion below.
 local function PageContent(Entry: {}, Container: Frame, Registry: {}, OnOpen: (() -> ())?, OnClose: (() -> ())?)
 	local ContentFrame = Add("Frame", { Parent = Container; Name = "PageFrame"; BackgroundColor3 = RGB(255, 255, 255); BackgroundTransparency = 1; BorderColor3 = RGB(0, 0, 0); BorderSizePixel = 0; Position = UD2(0, 0, 0, 12); Size = UFS(1, 1); Visible = false; }) :: Frame
-	local Left = Add("Frame", { Parent = ContentFrame; Name = "Left"; BackgroundColor3 = RGB(255, 255, 255); BackgroundTransparency = 1; BorderColor3 = RGB(0, 0, 0); BorderSizePixel = 0; Size = UD2(0.5, -6, 1, 0); }) :: Frame
-	local Right = Add("Frame", { Parent = ContentFrame; Name = "Right"; AnchorPoint = V2(1, 0); BackgroundColor3 = RGB(255, 255, 255); BackgroundTransparency = 1; BorderColor3 = RGB(0, 0, 0); BorderSizePixel = 0; Position = UFS(1, 0); Size = UD2(0.5, -6, 1, 0); }) :: Frame
-	Add("UIListLayout", { Parent = Left; Padding = UD(0, 12); SortOrder = SO.LayoutOrder; })
-	Add("UIListLayout", { Parent = Right; Padding = UD(0, 12); SortOrder = SO.LayoutOrder; })
+
+	local function MakeColumn(Name: string, Props: {}): ScrollingFrame
+		local Column = Add("ScrollingFrame", {
+			Parent = ContentFrame;
+			Name = Name;
+			BackgroundColor3 = RGB(255, 255, 255);
+			BackgroundTransparency = 1;
+			BorderColor3 = RGB(0, 0, 0);
+			BorderSizePixel = 0;
+			ScrollBarThickness = 3;
+			ScrollBarImageColor3 = RGB(78, 88, 129);
+			ScrollBarImageTransparency = 0.35;
+			ScrollingDirection = SBD.Y;
+			CanvasSize = UD2(0, 0, 0, 0);
+			AutomaticCanvasSize = AS.Y;
+			ElasticBehavior = Enum.ElasticBehavior.Never;
+			ClipsDescendants = true;
+		}) :: ScrollingFrame
+
+		for Key, Value in Props do
+			Column[Key] = Value
+		end
+
+		Add("UIListLayout", { Parent = Column; Padding = UD(0, 12); SortOrder = SO.LayoutOrder; })
+		Add("UIPadding", { Parent = Column; PaddingRight = UD(0, 6); PaddingBottom = UD(0, 8); })
+
+		return Column
+	end
+
+	local Left = MakeColumn("Left", {
+		Size = UD2(0.5, -6, 1, 0);
+	})
+	local Right = MakeColumn("Right", {
+		AnchorPoint = V2(1, 0);
+		Position = UFS(1, 0);
+		Size = UD2(0.5, -6, 1, 0);
+	})
 
 	Entry.Frame = ContentFrame
 	Entry.Section = SectionBuilder(ContentFrame)
@@ -1550,7 +1583,7 @@ Library.Window = function(self: Library, propertyTable: {})
 	local Header = Add("Frame", { Parent = Canvas; Name = "Header"; BackgroundColor3 = RGB(20, 20, 21); BorderColor3 = RGB(0, 0, 0); BorderSizePixel = 0; Position = UFO(76, 0); Size = UD2(1, -76, 0, 50); }) :: Frame 
 	local SubPages = Add("Frame", { Parent = Header; Name = "SubPages"; AutomaticSize = AS.X; BackgroundColor3 = RGB(255, 255, 255); BackgroundTransparency = 1; BorderColor3 = RGB(0, 0, 0); BorderSizePixel = 0; Size = UFS(0, 1); }) :: Frame 
 	local Search = Add("Frame", { Parent = Header; Name = "Search"; LayoutOrder = 1; Active = true; AnchorPoint = V2(1, 0); AutomaticSize = AS.X; BackgroundColor3 = RGB(9, 8, 8); BorderColor3 = RGB(0, 0, 0); BorderSizePixel = 0; Position = UFS(1, 0); Selectable = true; Size = UD2(0, 200, 1, 0); }) :: Frame 
-	local Pages = Add("Frame", { Parent = Canvas; Name = "Pages"; BackgroundColor3 = RGB(255, 255, 255); BackgroundTransparency = 1; BorderColor3 = RGB(0, 0, 0); BorderSizePixel = 0; Position = UFO(75, 50); Size = UD2(1, -75, 1, -50); }) :: Frame 
+	local Pages = Add("Frame", { Parent = Canvas; Name = "Pages"; BackgroundColor3 = RGB(255, 255, 255); BackgroundTransparency = 1; BorderColor3 = RGB(0, 0, 0); BorderSizePixel = 0; Position = UFO(75, 50); Size = UD2(1, -75, 1, -75); }) :: Frame 
 	local Footer = Add("Frame", { Parent = Canvas; Name = "Footer"; AnchorPoint = V2(0, 1); BackgroundColor3 = RGB(20, 20, 21); BorderColor3 = RGB(0, 0, 0); BorderSizePixel = 0; Position = UD2(0, 76, 1, 0); Size = UD2(1, -76, 0, 25); }) :: Frame 
 	local SearchBox = Add("TextBox", { Parent = Search; Name = "TextLabel"; Active = false; AutomaticSize = AS.X; ClearTextOnFocus = false; LayoutOrder = 1; BackgroundColor3 = RGB(255, 255, 255); BackgroundTransparency = 1; BorderColor3 = RGB(0, 0, 0); BorderSizePixel = 0; FontFace = FN("rbxassetid://12187365364", FW.SemiBold, FS.Normal); PlaceholderColor3 = RGB(255, 255, 255); PlaceholderText = "Search function"; Selectable = false; Size = UFS(0, 1); Text = ""; TextColor3 = RGB(255, 255, 255); TextSize = 14; TextTransparency = 0.5; }) :: TextBox
 	Add("UIStroke", { Parent = Canvas; ApplyStrokeMode = ASM.Border; Color = RGB(36, 37, 37); }) 
