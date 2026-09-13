@@ -208,12 +208,15 @@ local Keys = {
 	["Home"]              = "Home",
 	["PageUp"]            = "PageUp",
 	["PageDown"]          = "PageDown",
-	["RightShift"]        = "RightShift",
-	["LeftShift"]         = "LeftShift",
-	["RightControl"]      = "RightControl",
-	["LeftControl"]       = "LeftControl",
-	["LeftAlt"]           = "LeftAlt",
-	["RightAlt"]          = "RightAlt"
+	["RightShift"]        = "RShift",
+	["LeftShift"]         = "LShift",
+	["RightControl"]      = "RCtrl",
+	["LeftControl"]       = "LCtrl",
+	["LeftAlt"]           = "LAlt",
+	["RightAlt"]          = "RAlt",
+	["MouseButton1"]      = "MB1",
+	["MouseButton2"]      = "MB2",
+	["MouseButton3"]      = "MB3"
 }
 
 --@ functions
@@ -1819,9 +1822,8 @@ Library.SubElements.Keybind = function(self: Library, propertyTable: {})
 
 	local function Format(Key: EnumItem?): string
 		if not Key then
-			return "NONE"
+			return "—"
 		end
-
 		return Keys[Key.Name] or Key.Name
 	end
 
@@ -3006,7 +3008,22 @@ Library.SetWatermark = function(Text: string?, Enabled: boolean?)
 		})
 	end
 	local function Dot(Order: number)
-		return Chip("·", Order, true)
+		local Wrap = Add("Frame", {
+			Parent = Frame;
+			BackgroundTransparency = 1;
+			Size = UFO(4, 32);
+			LayoutOrder = Order;
+		})
+		local D = Add("Frame", {
+			Parent = Wrap;
+			AnchorPoint = V2(0.5, 0.5);
+			Position = UFS(0.5, 0.5);
+			Size = UFO(3, 3);
+			BackgroundColor3 = RGB(90, 94, 110);
+			BorderSizePixel = 0;
+		})
+		Add("UICorner", { Parent = D; CornerRadius = UD(1, 0); })
+		return Wrap
 	end
 
 	--@ strip trailing place ids / pure numbers from custom text
@@ -3160,9 +3177,9 @@ Library.SetKeybindList = function(Enabled: boolean?)
 			TextXAlignment = Align;
 		})
 	end
-	Col("Function", UFO(4, 0), UFO(100, 16), TXA.Left)
-	Col("Hotkey", UFS(0.5, 0) + UFO(-10, 0), UFO(50, 16), TXA.Center)
-	Col("Status", UFS(1, 0) + UFO(-70, 0), UFO(66, 16), TXA.Right)
+	Col("Function", UFO(6, 0), UFO(118, 16), TXA.Left)
+	Col("Hotkey", UFO(128, 0), UFO(72, 16), TXA.Center)
+	Col("Status", UFO(200, 0), UFO(56, 16), TXA.Right)
 
 	Add("Frame", {
 		Parent = Body;
@@ -3220,22 +3237,23 @@ Library.UpdateKeybindList = function(Name: string, KeyText: string, Active: bool
 			AutoButtonColor = false;
 			BackgroundColor3 = RGB(25, 25, 29);
 			BackgroundTransparency = 1;
-			Size = UD2(1, 0, 0, 28);
+			Size = UD2(1, 0, 0, 26);
 			BorderSizePixel = 0;
 			ZIndex = 122;
 		})
 		Add("UICorner", { Parent = Frame; CornerRadius = UD(0, 6); })
 
+		--@ fixed columns so long names never collide with keys
 		local NameLbl = Add("TextLabel", {
 			Parent = Frame;
 			Name = "Name";
 			BackgroundTransparency = 1;
-			Position = UFO(4, 0);
-			Size = UD2(0.42, -4, 1, 0);
+			Position = UFO(6, 0);
+			Size = UFO(118, 26);
 			FontFace = FN("rbxassetid://12187365364", FW.SemiBold, FS.Normal);
 			Text = Name;
 			TextColor3 = T.Text;
-			TextSize = 13;
+			TextSize = 12;
 			TextXAlignment = TXA.Left;
 			TextTruncate = ETT.AtEnd;
 		})
@@ -3243,24 +3261,25 @@ Library.UpdateKeybindList = function(Name: string, KeyText: string, Active: bool
 			Parent = Frame;
 			Name = "Key";
 			BackgroundTransparency = 1;
-			Position = UFS(0.42, 0);
-			Size = UFS(0.22, 1);
+			Position = UFO(128, 0);
+			Size = UFO(72, 26);
 			FontFace = FN("rbxassetid://12187365364", FW.SemiBold, FS.Normal);
 			Text = KeyText;
 			TextColor3 = T.Text;
-			TextSize = 13;
+			TextSize = 12;
 			TextXAlignment = TXA.Center;
+			TextTruncate = ETT.AtEnd;
 		})
 		local StatusLbl = Add("TextLabel", {
 			Parent = Frame;
 			Name = "Status";
 			BackgroundTransparency = 1;
-			Position = UFS(0.64, 0);
-			Size = UD2(0.36, -4, 1, 0);
+			Position = UFO(200, 0);
+			Size = UFO(56, 26);
 			FontFace = FN("rbxassetid://12187365364", FW.SemiBold, FS.Normal);
 			Text = Mode;
 			TextColor3 = RGB(160, 160, 165);
-			TextSize = 13;
+			TextSize = 12;
 			TextXAlignment = TXA.Right;
 		})
 
