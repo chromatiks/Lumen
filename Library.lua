@@ -2289,8 +2289,9 @@ Library.Window = function(self: Library, propertyTable: {})
 			}, propertyTable or {})
 
 			--@ shared header row, so this only shows while its own page is open
-			local SubPageButton = Add("TextButton", { Parent = SubPages; Name = "SubPageButton"; AutoButtonColor = false; AutomaticSize = AS.X; BackgroundColor3 = RGB(9, 8, 8); BorderColor3 = RGB(0, 0, 0); BorderSizePixel = 0; FontFace = FN("rbxasset://fonts/families/SourceSansPro.json", FW.Regular, FS.Normal); Size = UFS(0, 1); Text = ""; TextColor3 = RGB(0, 0, 0); TextSize = 14; Visible = Page.Opened; }) :: TextButton
-			Add("UIGradient", { Parent = SubPageButton; Color = CS{ CSK(0, RGB(81, 91, 129)), CSK(1, RGB(127, 142, 202)) }; Rotation = -70; })
+			local SubPageButton = Add("TextButton", { Parent = SubPages; Name = "SubPageButton"; AutoButtonColor = false; AutomaticSize = AS.X; BackgroundColor3 = Library.Theme.Background; BorderColor3 = RGB(0, 0, 0); BorderSizePixel = 0; FontFace = FN("rbxasset://fonts/families/SourceSansPro.json", FW.Regular, FS.Normal); Size = UFS(0, 1); Text = ""; TextColor3 = RGB(0, 0, 0); TextSize = 14; Visible = Page.Opened; }) :: TextButton
+			local SubGrad = Add("UIGradient", { Parent = SubPageButton; Color = CS{ CSK(0, Library.Theme.AccentDark), CSK(1, Library.Theme.Accent) }; Rotation = -70; })
+			Library.ThemeLink(SubGrad, "Gradient", "AccentDark", "Accent")
 			local SubPageLabel = Add("TextLabel", { Parent = SubPageButton; Name = "Label"; AutomaticSize = AS.XY; BackgroundColor3 = RGB(255, 255, 255); BackgroundTransparency = 1; BorderColor3 = RGB(0, 0, 0); BorderSizePixel = 0; FontFace = FN("rbxassetid://12187365364", FW.SemiBold, FS.Normal); Size = UFS(1, 1); Text = SubPage.Name; TextColor3 = RGB(255, 255, 255); TextSize = 14; TextTransparency = 0.5; }) :: TextLabel
 			Add("UIPadding", { Parent = SubPageButton; PaddingLeft = UD(0, 14); PaddingRight = UD(0, 14); })
 			Add("UICorner", { Parent = SubPageButton; CornerRadius = UD(0, 5); })
@@ -2306,7 +2307,7 @@ Library.Window = function(self: Library, propertyTable: {})
 				Tween(SubPageButton, { BackgroundColor3 = RGB(255, 255, 255) }, 0.15)
 				Tween(SubPageLabel, { TextTransparency = 0 }, 0.15)
 			end, function()
-				Tween(SubPageButton, { BackgroundColor3 = RGB(9, 8, 8) }, 0.15)
+				Tween(SubPageButton, { BackgroundColor3 = Library.Theme.Background }, 0.15)
 				Tween(SubPageLabel, { TextTransparency = 0.5 }, 0.15)
 			end)
 
@@ -2367,7 +2368,14 @@ end
 
 Library.ApplyTheme = function()
 	local T = Library.Theme
-	--@ drop dead links
+	--@ ensure accent dark tracks accent if not set
+	if T.Accent then
+		local H, S, V = T.Accent:ToHSV()
+		if not T.AccentDark then
+			T.AccentDark = HSV(H, S, math.max(V * 0.55, 0.15))
+		end
+	end
+
 	local Alive = {}
 	for _, Link in Library.ThemeLinks do
 		if Link.Object and Link.Object.Parent then
@@ -2376,7 +2384,7 @@ Library.ApplyTheme = function()
 				local A = T[Link.Key] or T.AccentDark
 				local B = T[Link.Key2 or "Accent"] or T.Accent
 				Link.Object.Color = CS{ CSK(0, A), CSK(1, B) }
-			elseif Link.Property and Link.Object[Link.Property] ~= nil and T[Link.Key] then
+			elseif Link.Property and T[Link.Key] then
 				pcall(function()
 					Link.Object[Link.Property] = T[Link.Key]
 				end)
@@ -2385,7 +2393,13 @@ Library.ApplyTheme = function()
 	end
 	Library.ThemeLinks = Alive
 
-	--@ window chrome
+	local function PaintGrad(Grad: UIGradient?)
+		if Grad then
+			Grad.Color = CS{ CSK(0, T.AccentDark), CSK(1, T.Accent) }
+		end
+	end
+
+	--@ window chrome + tabs
 	for _, Win in Library.Windows do
 		local Canvas = Win.Canvas
 		if not Canvas then continue end
@@ -2395,16 +2409,49 @@ Library.ApplyTheme = function()
 			Header.BackgroundColor3 = T.SurfaceAlt
 			local Stroke = Header:FindFirstChildOfClass("UIStroke")
 			if Stroke then Stroke.Color = T.Border end
+			local Search = Header:FindFirstChild("Search")
+			if Search and Search:IsA("GuiObject") then
+				Search.BackgroundColor3 = T.Background
+			end
 		end
 		local Footer = Canvas:FindFirstChild("Footer")
 		if Footer then
 			Footer.BackgroundColor3 = T.Surface
 			local Stroke = Footer:FindFirstChildOfClass("UIStroke")
 			if Stroke then Stroke.Color = T.Border end
+			for _, L in Footer:GetChildren() do
+				if L:IsA("TextLabel") then
+					L.TextColor3 = T.Text
+				end
+			end
 		end
 		local Sidebar = Canvas:FindFirstChild("Sidebar")
 		if Sidebar then
 			Sidebar.BackgroundColor3 = T.Surface
+		end
+
+		for _, Page in (Win.Pages or {}) do
+			if Page.Gradient then PaintGrad(Page.Gradient) end
+			if Page.Button then
+				--@ selected tabs keep white fill under accent gradient
+				if Page.Opened then
+					Page.Button.BackgroundTransparency = 0
+					if Page.IconLabel then
+						Page.IconLabel.ImageTransparency = 0
+						Page.IconLabel.ImageColor3 = RGB(0, 0, 0)
+					end
+				end
+			end
+			for _, Sub in (Page.SubPages or {}) do
+				local Btn = Sub.Button
+				if Btn then
+					local Grad = Btn:FindFirstChildOfClass("UIGradient")
+					PaintGrad(Grad)
+					if not Sub.Opened then
+						Btn.BackgroundColor3 = T.Background
+					end
+				end
+			end
 		end
 	end
 
@@ -2420,6 +2467,10 @@ Library.ApplyTheme = function()
 				if Label and Label:IsA("TextLabel") then
 					Label.TextColor3 = T.Text
 				end
+				local Icon = Header:FindFirstChild("Icon")
+				if Icon and Icon:IsA("ImageLabel") then
+					Icon.ImageColor3 = T.Accent
+				end
 			end
 		end
 	end
@@ -2432,7 +2483,10 @@ Library.ApplyTheme = function()
 		if Library.Watermark.Accent then
 			Library.Watermark.Accent.BackgroundColor3 = T.Accent
 			local G = Library.Watermark.Accent:FindFirstChildOfClass("UIGradient")
-			if G then G.Color = CS{ CSK(0, T.AccentDark), CSK(1, T.Accent) } end
+			PaintGrad(G)
+		end
+		if Library.Watermark.Label then
+			Library.Watermark.Label.TextColor3 = T.Text
 		end
 	end
 	if Library.KeybindList.Frame then
@@ -2441,6 +2495,8 @@ Library.ApplyTheme = function()
 		if Stroke then Stroke.Color = T.Border end
 		if Library.KeybindList.Accent then
 			Library.KeybindList.Accent.BackgroundColor3 = T.Accent
+			local G = Library.KeybindList.Accent:FindFirstChildOfClass("UIGradient")
+			PaintGrad(G)
 		end
 		local Header = Library.KeybindList.Frame:FindFirstChild("Header")
 		if Header then Header.BackgroundColor3 = T.SurfaceAlt end
@@ -2871,13 +2927,13 @@ Library.SetWatermark = function(Text: string?, Enabled: boolean?)
 		Position = UD2(0.5, 0, 0, 12);
 		AutomaticSize = AS.X;
 		Size = UFO(0, 32);
-		BackgroundColor3 = RGB(15, 14, 15);
+		BackgroundColor3 = Library.Theme.Surface;
 		BorderSizePixel = 0;
 		ZIndex = 120;
 		Visible = Library.Watermark.Enabled == true;
 	})
 	Add("UICorner", { Parent = Frame; CornerRadius = UD(0, 7); })
-	Add("UIStroke", { Parent = Frame; ApplyStrokeMode = ASM.Border; Color = RGB(36, 37, 37); })
+	Add("UIStroke", { Parent = Frame; ApplyStrokeMode = ASM.Border; Color = Library.Theme.Border; })
 	Add("UIShadow", { Parent = Frame; BlurRadius = UD(0, 16); Spread = UFO(4, 4); Transparency = 0.7; })
 	Add("UIPadding", { Parent = Frame; PaddingLeft = UD(0, 10); PaddingRight = UD(0, 12); })
 	Add("UIListLayout", {
@@ -2903,7 +2959,7 @@ Library.SetWatermark = function(Text: string?, Enabled: boolean?)
 	})
 
 	local function Chip(Text: string, Order: number, Dim: boolean?): TextLabel
-		local L = Add("TextLabel", {
+		return Add("TextLabel", {
 			Parent = Frame;
 			BackgroundTransparency = 1;
 			AutomaticSize = AS.X;
@@ -2914,37 +2970,41 @@ Library.SetWatermark = function(Text: string?, Enabled: boolean?)
 			TextSize = 12;
 			LayoutOrder = Order;
 		})
-		return L
 	end
-
 	local function Dot(Order: number)
 		return Chip("·", Order, true)
 	end
 
 	local Title = Chip(Library.Watermark.Text or "Lumen", 1, false)
 	Dot(2)
-	local Place = Chip(tostring(game.PlaceId), 3, true)
-	Dot(4)
+	local Place = Chip("…", 3, true)
+	Place.Visible = false --@ hidden until a real place name resolves (never show PlaceId)
+	local PlaceDot = Dot(4)
+	PlaceDot.Visible = false
 	local FpsL = Chip("0 fps", 5, true)
 	Dot(6)
 	local PingL = Chip("0 ms", 7, true)
 	Dot(8)
 	local TimeL = Chip(os.date("%H:%M:%S"), 9, true)
 
-	--@ resolve place name async so watermark still builds if Marketplace yields/fails
-	task.spawn(function()
-		local Ok, Info = pcall(function()
-			return game:GetService("MarketplaceService"):GetProductInfo(game.PlaceId)
-		end)
-		if Ok and Info and Info.Name and Place and Place.Parent then
-			Place.Text = Info.Name
-		end
-	end)
-
 	Library.Watermark.Frame = Frame
 	Library.Watermark.Label = Title
 	Library.Watermark.Stats = FpsL
 	Library.Watermark.Accent = Logo
+
+	task.spawn(function()
+		local Ok, Info = pcall(function()
+			return game:GetService("MarketplaceService"):GetProductInfo(game.PlaceId)
+		end)
+		if Ok and Info and type(Info.Name) == "string" and Info.Name ~= "" and Place and Place.Parent then
+			--@ skip pure numeric names
+			if not Info.Name:match("^%d+$") then
+				Place.Text = Info.Name
+				Place.Visible = true
+				PlaceDot.Visible = true
+			end
+		end
+	end)
 
 	if Library.Watermark._StatsConn then
 		Library.Watermark._StatsConn:Disconnect()
@@ -2982,195 +3042,257 @@ Library.SetKeybindList = function(Enabled: boolean?)
 		Library.KeybindList.Rows = {}
 	end
 
-	local Frame = Add("Frame", {
+	local T = Library.Theme
+	local Panel = Add("Frame", {
 		Parent = Gui;
 		Name = "KeybindList";
-		Position = UFO(16, 16);
-		AutomaticSize = AS.XY;
-		BackgroundColor3 = RGB(15, 14, 15);
+		Position = UFO(18, math.floor((workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize.Y or 800) * 0.35));
+		Size = UFO(280, 0);
+		AutomaticSize = AS.Y;
+		BackgroundColor3 = T.Surface;
 		BorderSizePixel = 0;
-		ZIndex = 120;
 		Visible = Library.KeybindList.Enabled == true;
+		ZIndex = 120;
+		Active = true;
 	})
-	Add("UICorner", { Parent = Frame; CornerRadius = UD(0, 8); })
-	Add("UIStroke", { Parent = Frame; ApplyStrokeMode = ASM.Border; Color = RGB(36, 37, 37); })
-	Add("UIShadow", { Parent = Frame; BlurRadius = UD(0, 16); Spread = UFO(4, 4); Transparency = 0.7; })
-
-	local Header = Add("Frame", {
-		Parent = Frame;
-		Name = "Header";
-		BackgroundColor3 = RGB(20, 20, 21);
-		BorderSizePixel = 0;
-		Size = UD2(1, 0, 0, 34);
+	Add("UICorner", { Parent = Panel; CornerRadius = UD(0, 10); })
+	Add("UIStroke", { Parent = Panel; ApplyStrokeMode = ASM.Border; Color = RGB(30, 30, 36); })
+	Add("UIPadding", {
+		Parent = Panel;
+		PaddingTop = UD(0, 12);
+		PaddingBottom = UD(0, 10);
+		PaddingLeft = UD(0, 12);
+		PaddingRight = UD(0, 12);
 	})
-	Add("UICorner", {
-		Parent = Header;
-		TopLeftRadius = UD(0, 8);
-		TopRightRadius = UD(0, 8);
-		BottomLeftRadius = UD(0, 0);
-		BottomRightRadius = UD(0, 0);
-	})
-	Add("UIPadding", { Parent = Header; PaddingLeft = UD(0, 12); PaddingRight = UD(0, 12); })
 	Add("UIListLayout", {
-		Parent = Header;
-		FillDirection = FD.Horizontal;
-		Padding = UD(0, 8);
-		VerticalAlignment = VFA.Center;
+		Parent = Panel;
+		SortOrder = SO.LayoutOrder;
+		Padding = UD(0, 10);
 	})
-	local Dot = Add("Frame", {
+
+	local Header = Add("TextButton", {
+		Parent = Panel;
+		Name = "Header";
+		Size = UD2(1, 0, 0, 22);
+		BackgroundTransparency = 1;
+		Text = "";
+		AutoButtonColor = false;
+		LayoutOrder = 0;
+		ZIndex = 121;
+	})
+	local HeaderIcon = Add("Frame", {
 		Parent = Header;
-		BackgroundColor3 = Library.Theme.Accent;
+		BackgroundColor3 = T.Accent;
 		Size = UFO(8, 8);
+		Position = UFO(0, 7);
 		BorderSizePixel = 0;
 	})
-	Add("UICorner", { Parent = Dot; CornerRadius = UD(1, 0); })
+	Add("UICorner", { Parent = HeaderIcon; CornerRadius = UD(1, 0); })
 	Add("UIGradient", {
-		Parent = Dot;
-		Color = CS{ CSK(0, Library.Theme.AccentDark), CSK(1, Library.Theme.Accent) };
+		Parent = HeaderIcon;
+		Color = CS{ CSK(0, T.AccentDark), CSK(1, T.Accent) };
 		Rotation = -90;
 	})
 	Add("TextLabel", {
 		Parent = Header;
 		BackgroundTransparency = 1;
-		AutomaticSize = AS.X;
-		Size = UFO(0, 34);
+		Position = UFO(16, 0);
+		Size = UD2(1, -16, 1, 0);
 		FontFace = FN("rbxassetid://12187365364", FW.SemiBold, FS.Normal);
 		Text = "Keybind list";
-		TextColor3 = RGB(235, 236, 240);
-		TextSize = 13;
+		TextColor3 = T.Text;
+		TextSize = 14;
+		TextXAlignment = TXA.Left;
 	})
 
 	local Body = Add("Frame", {
-		Parent = Frame;
+		Parent = Panel;
 		Name = "Body";
 		BackgroundTransparency = 1;
-		Position = UFO(0, 34);
-		AutomaticSize = AS.XY;
-		Size = UFO(240, 0);
+		Size = UD2(1, 0, 0, 0);
+		AutomaticSize = AS.Y;
+		LayoutOrder = 1;
+		ClipsDescendants = true;
 	})
-	Add("UIPadding", {
-		Parent = Body;
-		PaddingLeft = UD(0, 10);
-		PaddingRight = UD(0, 10);
-		PaddingTop = UD(0, 8);
-		PaddingBottom = UD(0, 10);
-	})
-	Add("UIListLayout", { Parent = Body; Padding = UD(0, 4); SortOrder = SO.LayoutOrder; })
+	Add("UIListLayout", { Parent = Body; SortOrder = SO.LayoutOrder; Padding = UD(0, 8); })
 
 	local Cols = Add("Frame", {
 		Parent = Body;
+		Name = "Cols";
 		BackgroundTransparency = 1;
-		Size = UFO(220, 16);
-		LayoutOrder = -1;
+		Size = UD2(1, 0, 0, 16);
+		LayoutOrder = 1;
 	})
-	Add("UIListLayout", {
-		Parent = Cols;
-		FillDirection = FD.Horizontal;
-		VerticalAlignment = VFA.Center;
-	})
-	for i, Title in { "Function", "Hotkey", "Status" } do
+	local function Col(Text: string, Pos: UDim2, Size: UDim2, Align: Enum.TextXAlignment)
 		Add("TextLabel", {
 			Parent = Cols;
 			BackgroundTransparency = 1;
-			Size = UFO(i == 1 and 90 or 65, 16);
+			Position = Pos;
+			Size = Size;
 			FontFace = FN("rbxassetid://12187365364", FW.SemiBold, FS.Normal);
-			Text = Title;
-			TextColor3 = RGB(110, 114, 130);
-			TextSize = 11;
-			TextXAlignment = TXA.Left;
+			Text = Text;
+			TextColor3 = RGB(160, 160, 165);
+			TextSize = 12;
+			TextXAlignment = Align;
 		})
 	end
+	Col("Function", UFO(4, 0), UFO(100, 16), TXA.Left)
+	Col("Hotkey", UFS(0.5, 0) + UFO(-10, 0), UFO(50, 16), TXA.Center)
+	Col("Status", UFS(1, 0) + UFO(-70, 0), UFO(66, 16), TXA.Right)
 
-	BindDrag(Frame, Header, false)
+	Add("Frame", {
+		Parent = Body;
+		Name = "Divider";
+		Size = UD2(1, 0, 0, 1);
+		BackgroundColor3 = RGB(21, 21, 23);
+		BorderSizePixel = 0;
+		LayoutOrder = 2;
+	})
 
-	Library.KeybindList.Frame = Frame
+	local Rows = Add("Frame", {
+		Parent = Body;
+		Name = "Rows";
+		BackgroundTransparency = 1;
+		Size = UD2(1, 0, 0, 0);
+		AutomaticSize = AS.Y;
+		LayoutOrder = 3;
+	})
+	Add("UIListLayout", { Parent = Rows; SortOrder = SO.LayoutOrder; Padding = UD(0, 2); })
+
+	--@ drag by header
+	BindDrag(Panel, Header, false)
+
+	Library.KeybindList.Frame = Panel
 	Library.KeybindList.Body = Body
+	Library.KeybindList.RowsFolder = Rows
 	Library.KeybindList.Rows = {}
-	Library.KeybindList.Accent = Dot
+	Library.KeybindList.Accent = HeaderIcon
 end
 
 Library.UpdateKeybindList = function(Name: string, KeyText: string, Active: boolean?, Mode: string?)
 	if not Library.KeybindList.Enabled then
 		return
 	end
-	if not Library.KeybindList.Frame or not Library.KeybindList.Body then
+	if not Library.KeybindList.Frame or not Library.KeybindList.RowsFolder then
 		Library.SetKeybindList(true)
 	end
 
 	Mode = Mode or "Toggle"
+	KeyText = KeyText or "—"
 	local Rows = Library.KeybindList.Rows
+	local Folder = Library.KeybindList.RowsFolder
+	local T = Library.Theme
 	local Row = Rows[Name]
+
 	if not Row then
-		Row = Add("Frame", {
-			Parent = Library.KeybindList.Body;
-			BackgroundColor3 = RGB(28, 29, 34);
+		local Frame = Add("TextButton", {
+			Parent = Folder;
+			Text = "";
+			AutoButtonColor = false;
+			BackgroundColor3 = RGB(25, 25, 29);
 			BackgroundTransparency = 1;
-			Size = UFO(220, 24);
+			Size = UD2(1, 0, 0, 28);
 			BorderSizePixel = 0;
+			ZIndex = 122;
 		})
-		Add("UICorner", { Parent = Row; CornerRadius = UD(0, 5); })
-		Add("UIPadding", { Parent = Row; PaddingLeft = UD(0, 6); PaddingRight = UD(0, 6); })
-		Add("UIListLayout", {
-			Parent = Row;
-			FillDirection = FD.Horizontal;
-			VerticalAlignment = VFA.Center;
-		})
-		Add("TextLabel", {
-			Parent = Row;
+		Add("UICorner", { Parent = Frame; CornerRadius = UD(0, 6); })
+
+		local NameLbl = Add("TextLabel", {
+			Parent = Frame;
 			Name = "Name";
 			BackgroundTransparency = 1;
-			Size = UFO(90, 24);
+			Position = UFO(4, 0);
+			Size = UD2(0.42, -4, 1, 0);
 			FontFace = FN("rbxassetid://12187365364", FW.SemiBold, FS.Normal);
 			Text = Name;
-			TextColor3 = RGB(210, 212, 220);
-			TextSize = 12;
+			TextColor3 = T.Text;
+			TextSize = 13;
 			TextXAlignment = TXA.Left;
 			TextTruncate = ETT.AtEnd;
 		})
-		Add("TextLabel", {
-			Parent = Row;
+		local KeyLbl = Add("TextLabel", {
+			Parent = Frame;
 			Name = "Key";
 			BackgroundTransparency = 1;
-			Size = UFO(65, 24);
+			Position = UFS(0.42, 0);
+			Size = UFS(0.22, 1);
 			FontFace = FN("rbxassetid://12187365364", FW.SemiBold, FS.Normal);
 			Text = KeyText;
-			TextColor3 = RGB(200, 204, 220);
-			TextSize = 12;
-			TextXAlignment = TXA.Left;
+			TextColor3 = T.Text;
+			TextSize = 13;
+			TextXAlignment = TXA.Center;
 		})
-		Add("TextLabel", {
-			Parent = Row;
+		local StatusLbl = Add("TextLabel", {
+			Parent = Frame;
 			Name = "Status";
 			BackgroundTransparency = 1;
-			Size = UFO(65, 24);
+			Position = UFS(0.64, 0);
+			Size = UD2(0.36, -4, 1, 0);
 			FontFace = FN("rbxassetid://12187365364", FW.SemiBold, FS.Normal);
 			Text = Mode;
-			TextColor3 = RGB(140, 144, 160);
-			TextSize = 12;
-			TextXAlignment = TXA.Left;
+			TextColor3 = RGB(160, 160, 165);
+			TextSize = 13;
+			TextXAlignment = TXA.Right;
 		})
+
+		Frame.MouseEnter:Connect(function()
+			if Frame:GetAttribute("Active") then return end
+			Tween(Frame, { BackgroundTransparency = 0.55 }, 0.12)
+		end)
+		Frame.MouseLeave:Connect(function()
+			if Frame:GetAttribute("Active") then
+				Tween(Frame, { BackgroundTransparency = 0 }, 0.12)
+			else
+				Tween(Frame, { BackgroundTransparency = 1 }, 0.12)
+			end
+		end)
+
+		Row = { Frame = Frame; Name = NameLbl; Key = KeyLbl; Status = StatusLbl }
 		Rows[Name] = Row
 	end
 
-	local KeyLabel = Row:FindFirstChild("Key")
-	local StatusLabel = Row:FindFirstChild("Status")
-	if KeyLabel then KeyLabel.Text = KeyText or "None" end
-	if StatusLabel then StatusLabel.Text = Mode end
+	Row.Key.Text = KeyText
+	Row.Status.Text = Mode
+	Row.Frame:SetAttribute("Active", Active == true)
 
 	if Active then
-		Tween(Row, { BackgroundTransparency = 0 }, 0.12)
+		Tween(Row.Frame, { BackgroundTransparency = 0 }, 0.12)
+		Row.Name.TextColor3 = T.Text
+		Row.Key.TextColor3 = T.Accent
+		Row.Status.TextColor3 = T.Accent
 	else
-		Tween(Row, { BackgroundTransparency = 1 }, 0.12)
+		Tween(Row.Frame, { BackgroundTransparency = 1 }, 0.12)
+		Row.Name.TextColor3 = T.Text
+		Row.Key.TextColor3 = T.Text
+		Row.Status.TextColor3 = RGB(160, 160, 165)
 	end
 end
 
+Library._NotifyOrder = 0
+Library._Toasts = {}
+Library.MaxNotifications = 5
+
 Library.Notify = function(propertyTable: {})
 	local Props = Overwrite({
-		Title = "Lumen";
+		Title = "Notification";
 		Text = "";
-		Duration = 3;
-		Type = "Info";
+		Content = nil;
+		Duration = 4;
+		Type = "Info"; -- Info / Success / Warning / Error
 	}, propertyTable or {})
+
+	local Content = Props.Content or Props.Text or ""
+	local Duration = Props.Duration or 4
+	local T = Library.Theme
+
+	local TypeColor = T.Text
+	if Props.Type == "Success" then
+		TypeColor = RGB(150, 220, 170)
+	elseif Props.Type == "Warning" or Props.Type == "Warn" then
+		TypeColor = RGB(240, 176, 108)
+	elseif Props.Type == "Error" then
+		TypeColor = RGB(240, 120, 120)
+	end
 
 	local Gui = EnsureOverlayGui()
 	if not Library._NotifyHost then
@@ -3178,7 +3300,7 @@ Library.Notify = function(propertyTable: {})
 			Parent = Gui;
 			Name = "Notifications";
 			BackgroundTransparency = 1;
-			Size = UFO(300, 0);
+			Size = UFO(320, 0);
 			AutomaticSize = AS.Y;
 			ZIndex = 200;
 		})
@@ -3210,130 +3332,211 @@ Library.Notify = function(propertyTable: {})
 		Layout.HorizontalAlignment = HFA.Right
 	end
 
-	local Accent = Library.Theme.Accent
-	if Props.Type == "Success" then Accent = RGB(90, 200, 130)
-	elseif Props.Type == "Warn" then Accent = RGB(230, 180, 70)
-	elseif Props.Type == "Error" then Accent = RGB(230, 85, 95) end
-
-	local SlideFrom = (Pos:find("Left") and -20) or 20
-
-	local Card = Add("Frame", {
+	Library._NotifyOrder += 1
+	local Slot = Add("Frame", {
 		Parent = Library._NotifyHost;
-		Size = UFO(290, 0);
-		AutomaticSize = AS.Y;
-		BackgroundColor3 = RGB(15, 14, 15);
-		BorderSizePixel = 0;
-		ZIndex = 201;
+		Size = UD2(1, 0, 0, 0);
+		BackgroundTransparency = 1;
+		LayoutOrder = Library._NotifyOrder;
 		ClipsDescendants = true;
 	})
-	Add("UICorner", { Parent = Card; CornerRadius = UD(0, 8); })
-	Add("UIStroke", { Parent = Card; ApplyStrokeMode = ASM.Border; Color = RGB(36, 37, 37); })
-	Add("UIShadow", { Parent = Card; BlurRadius = UD(0, 18); Spread = UFO(4, 4); Transparency = 0.65; })
 
-	local AccentBar = Add("Frame", {
-		Parent = Card;
-		BackgroundColor3 = Accent;
+	local SlideDir = (Pos:find("Left") and -1) or 1
+	local Shell = Add("Frame", {
+		Parent = Slot;
+		Position = UFO(320 * SlideDir, 0);
+		Size = UD2(1, 0, 0, 0);
+		AutomaticSize = AS.Y;
+		BackgroundTransparency = 1;
+	})
+
+	--@ soft drop shadow
+	local Shadow = Add("ImageLabel", {
+		Parent = Shell;
+		Position = UFO(-18, -18);
+		Size = UD2(1, 36, 1, 36);
+		BackgroundTransparency = 1;
+		Image = "rbxassetid://6014261993";
+		ImageColor3 = RGB(0, 0, 0);
+		ImageTransparency = 1;
+		ScaleType = SCL.Slice;
+		SliceCenter = Rect.new(49, 49, 450, 450);
+		ZIndex = 0;
+	})
+
+	local Card = Add("CanvasGroup", {
+		Parent = Shell;
+		Size = UD2(1, 0, 0, 0);
+		AutomaticSize = AS.Y;
+		BackgroundColor3 = T.Background;
 		BorderSizePixel = 0;
-		Size = UD2(0, 3, 1, 0);
-		ZIndex = 202;
+		GroupTransparency = 1;
+		ZIndex = 1;
+	})
+	Add("UICorner", { Parent = Card; CornerRadius = UD(0, 10); })
+	local CardStroke = Add("UIStroke", {
+		Parent = Card;
+		ApplyStrokeMode = ASM.Border;
+		Color = T.Border;
+		Thickness = 1;
+	})
+
+	--@ top hairline
+	Add("Frame", {
+		Parent = Card;
+		Size = UD2(1, 0, 0, 1);
+		BackgroundColor3 = RGB(255, 255, 255);
+		BackgroundTransparency = 0.93;
+		BorderSizePixel = 0;
+		ZIndex = 2;
+	})
+
+	--@ accent glow corner
+	local Glow = Add("ImageLabel", {
+		Parent = Card;
+		AnchorPoint = V2(1, 0);
+		Position = UD2(1, -8, 0, -8);
+		Size = UFO(200, 100);
+		BackgroundTransparency = 1;
+		Image = "rbxassetid://8992230677";
+		ImageColor3 = T.Accent;
+		ImageTransparency = 0.86;
+		ZIndex = 0;
 	})
 	Add("UIGradient", {
-		Parent = AccentBar;
-		Color = CS{ CSK(0, Accent), CSK(1, Library.Theme.AccentDark) };
+		Parent = Glow;
+		Color = CS{ CSK(0, RGB(255, 255, 255)), CSK(1, T.Accent) };
 		Rotation = 90;
 	})
 
-	local Content = Add("Frame", {
+	local Body = Add("Frame", {
 		Parent = Card;
-		BackgroundTransparency = 1;
-		Position = UFO(12, 0);
-		Size = UD2(1, -16, 0, 0);
+		Size = UD2(1, 0, 0, 0);
 		AutomaticSize = AS.Y;
+		BackgroundTransparency = 1;
+		ZIndex = 3;
 	})
 	Add("UIPadding", {
-		Parent = Content;
-		PaddingTop = UD(0, 12);
-		PaddingBottom = UD(0, 14);
-		PaddingRight = UD(0, 8);
+		Parent = Body;
+		PaddingLeft = UD(0, 16);
+		PaddingRight = UD(0, 16);
+		PaddingTop = UD(0, 14);
+		PaddingBottom = UD(0, 22);
 	})
-	Add("UIListLayout", { Parent = Content; Padding = UD(0, 4); SortOrder = SO.LayoutOrder; })
 
-	Add("TextLabel", {
-		Parent = Content;
+	local Title = Add("TextLabel", {
+		Parent = Body;
 		BackgroundTransparency = 1;
-		Size = UD2(1, 0, 0, 16);
+		Size = UD2(1, -28, 0, 16);
 		FontFace = FN("rbxassetid://12187365364", FW.SemiBold, FS.Normal);
 		Text = Props.Title;
-		TextColor3 = RGB(240, 241, 245);
-		TextSize = 13;
+		TextColor3 = TypeColor;
+		TextSize = 14;
 		TextXAlignment = TXA.Left;
-		LayoutOrder = 1;
 	})
-	if Props.Text ~= "" then
+
+	local Close = Add("TextButton", {
+		Parent = Body;
+		AnchorPoint = V2(1, 0);
+		Position = UD2(1, 6, 0, -4);
+		Size = UFO(24, 24);
+		BackgroundTransparency = 1;
+		Text = "×";
+		TextColor3 = RGB(160, 160, 165);
+		TextSize = 20;
+		FontFace = FN("rbxassetid://12187365364", FW.SemiBold, FS.Normal);
+		AutoButtonColor = false;
+		ZIndex = 4;
+	})
+	Close.MouseEnter:Connect(function()
+		Tween(Close, { TextColor3 = T.Text }, 0.15)
+	end)
+	Close.MouseLeave:Connect(function()
+		Tween(Close, { TextColor3 = RGB(160, 160, 165) }, 0.2)
+	end)
+
+	if Content ~= "" then
 		Add("TextLabel", {
-			Parent = Content;
+			Parent = Body;
 			BackgroundTransparency = 1;
-			AutomaticSize = AS.Y;
+			Position = UFO(0, 20);
 			Size = UD2(1, 0, 0, 0);
+			AutomaticSize = AS.Y;
 			FontFace = FN("rbxassetid://12187365364", FW.SemiBold, FS.Normal);
-			Text = Props.Text;
-			TextColor3 = RGB(155, 158, 175);
-			TextSize = 12;
+			Text = Content;
+			TextColor3 = RGB(160, 160, 165);
+			TextSize = 13;
+			TextTransparency = 0;
 			TextWrapped = true;
 			TextXAlignment = TXA.Left;
-			LayoutOrder = 2;
+			TextYAlignment = TYA.Top;
 		})
 	end
 
-	--@ progress bar along the bottom
-	local ProgressBG = Add("Frame", {
+	--@ progress bar
+	local BarBG = Add("Frame", {
 		Parent = Card;
 		AnchorPoint = V2(0, 1);
-		Position = UFS(0, 1);
-		Size = UD2(1, 0, 0, 2);
-		BackgroundColor3 = RGB(28, 29, 34);
+		Position = UD2(0, 16, 1, -8);
+		Size = UD2(1, -32, 0, 3);
+		BackgroundColor3 = T.SurfaceAlt;
 		BorderSizePixel = 0;
-		ZIndex = 203;
+		ZIndex = 5;
 	})
-	local Progress = Add("Frame", {
-		Parent = ProgressBG;
-		BackgroundColor3 = Accent;
-		BorderSizePixel = 0;
+	Add("UICorner", { Parent = BarBG; CornerRadius = UD(1, 0); })
+	local Bar = Add("Frame", {
+		Parent = BarBG;
 		Size = UFS(1, 1);
-		ZIndex = 204;
+		BackgroundColor3 = T.Accent;
+		BorderSizePixel = 0;
 	})
-	Add("UIGradient", {
-		Parent = Progress;
-		Color = CS{ CSK(0, Library.Theme.AccentDark), CSK(1, Accent) };
-	})
+	Add("UICorner", { Parent = Bar; CornerRadius = UD(1, 0); })
 
-	Card.Position = UFO(SlideFrom, 0)
-	Card.BackgroundTransparency = 1
-	for _, D in Card:GetDescendants() do
-		if D:IsA("TextLabel") then
-			D.TextTransparency = 1
+	task.defer(function()
+		if Slot.Parent then
+			local H = math.max(Card.AbsoluteSize.Y, 56)
+			Tween(Slot, { Size = UD2(1, 0, 0, H) }, 0.3, ES.Quint)
 		end
-	end
-
-	Tween(Card, { Position = UFO(0, 0), BackgroundTransparency = 0 }, 0.35, ES.Quint)
-	for _, D in Card:GetDescendants() do
-		if D:IsA("TextLabel") then
-			Tween(D, { TextTransparency = D.Name == "" and 0 or (D.TextColor3 == RGB(155, 158, 175) and 0 or 0) }, 0.3)
-			--@ simplify: full visible
-			D.TextTransparency = 0
-		end
-	end
-
-	Tween(Progress, { Size = UD2(0, 0, 1, 0) }, Props.Duration, ES.Linear)
-
-	task.delay(Props.Duration, function()
-		if not Card or not Card.Parent then return end
-		Tween(Card, { Position = UFO(SlideFrom, 0), BackgroundTransparency = 1 }, 0.3, ES.Quad)
-		task.wait(0.32)
-		if Card then Card:Destroy() end
 	end)
 
-	return Card
+	Tween(Shell, { Position = UFO(0, 0) }, 0.5, ES.Back)
+	Tween(Card, { GroupTransparency = 0 }, 0.3)
+	Tween(Shadow, { ImageTransparency = 0.6 }, 0.4)
+	Tween(Bar, { Size = UD2(0, 0, 1, 0) }, Duration, ES.Linear)
+
+	local Closed = false
+	local function Dismiss()
+		if Closed then return end
+		Closed = true
+		for i, Fn in Library._Toasts do
+			if Fn == Dismiss then
+				table.remove(Library._Toasts, i)
+				break
+			end
+		end
+		Tween(Shell, { Position = UFO(320 * SlideDir, 0) }, 0.3, ES.Quint)
+		Tween(Card, { GroupTransparency = 1 }, 0.2)
+		Tween(CardStroke, { Transparency = 1 }, 0.15)
+		Tween(Shadow, { ImageTransparency = 1 }, 0.2)
+		task.delay(0.22, function()
+			Slot.ClipsDescendants = true
+			Tween(Slot, { Size = UD2(1, 0, 0, 0) }, 0.22, ES.Quint)
+			task.delay(0.24, function()
+				Slot:Destroy()
+			end)
+		end)
+	end
+
+	task.delay(Duration, Dismiss)
+	Close.Activated:Connect(Dismiss)
+	TIS(Library._Toasts, Dismiss)
+
+	while #Library._Toasts > Library.MaxNotifications do
+		local Oldest = table.remove(Library._Toasts, 1)
+		if Oldest then Oldest() end
+	end
+
+	return { Dismiss = Dismiss }
 end
 
 Library.Unload = function()
