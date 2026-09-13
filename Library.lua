@@ -1,4 +1,54 @@
+--[=[
+           _,    _   _    ,_
+      .o888P     Y8o8Y     Y888o.
+     d88888      88888      88888b
+    d888888b_  _d88888b_  _d888888b
+    8888888888888888888888888888888
+    8888888888888888888888888888888
+    YJGS8P"Y888P"Y888P"Y888P"Y8888P
+     Y888   '8'   Y8P   '8'   888Y
+      '8o          V          o8'
+        `                     `
 
+    example usage:
+
+    local Lumen = require(script.Parent.Lumen)
+
+    local Window = Lumen:Window({ Title = "Lumen"; Footer = ".gg/robloxuis" })
+
+    --@ pages fill the sidebar; the first one added opens automatically
+    local Combat = Window:Page({ Icon = 89784578844770 })
+    local Settings = Window:Page({ Icon = 89784578844770 })
+
+    --@ a sub page is a full page reached through a pill button in the header row.
+    --@ once a page has sub pages, they own its content area, so don't mix
+    --@ Page:Section and Page:SubPage on the same page
+    local Aimbot = Combat:SubPage({ Name = "Aimbot" })
+    local AntiAim = Combat:SubPage({ Name = "Anti-Aim" })
+
+    --@ sections stack in the Left or Right column of their page or sub page
+    local Section = Aimbot:Section({ Name = "Main"; Side = "Left"; Icon = 107651426482528 })
+
+    --@ a label is a row; toggles, keybinds and colorpickers attach onto it
+    local Label = Section:Label({ Text = "Enable aimbot" })
+
+    Label:Toggle({ State = false; Callback = function(State) print(State) end })
+    Label:Keybind({ Key = Enum.KeyCode.RightShift; Type = "Hold"; Callback = function(State) print(State) end })
+    Label:Colorpicker({ Color = Color3.fromRGB(255, 0, 0); Transparency = 0; Callback = function(Color, Transparency) print(Color, Transparency) end })
+
+    local Slider = Section:Slider({ Name = "Field of view"; Suffix = "°"; Value = 67; Min = 1; Max = 120; Increment = 1; Callback = print })
+    local Dropdown = Section:Dropdown({ Name = "Target part"; Options = { "Head", "Torso", "Random" }; Value = "Head"; Callback = print })
+    local Modes = Section:Dropdown({ Name = "ESP"; Multi = true; Options = { "Box", "Name", "Health" }; Value = { "Box" }; Callback = print })
+    local Input = Section:Input({ Name = "Discord"; Value = "discord.gg/robloxuis"; Placeholder = "invite link"; Callback = print })
+
+    --@ everything exposes a setter for changing it from code
+    Slider.Set(90)
+    Dropdown.Set("Torso")
+    Modes.Set({ "Box", "Health" })
+    Dropdown.UpdateOptions({ "Head", "Torso", "Limbs" })
+    Input.Set("discord.gg/lumen")
+    AntiAim.Open()
+--]=]
 
 --@ abbreviations
 local CSK = ColorSequenceKeypoint.new
@@ -203,6 +253,16 @@ local function BindDrag(Object: GuiObject, Handle: GuiObject?)
 	local Dragging = false
 	local DragStart: Vector3
 	local StartPosition: UDim2
+	local CurrentDelta = V2(0, 0)
+	local RenderConn: RBXScriptConnection?
+
+	local function StopDrag()
+		Dragging = false
+		if RenderConn then
+			RenderConn:Disconnect()
+			RenderConn = nil
+		end
+	end
 
 	Handle.InputBegan:Connect(function(Input)
 		if Input.UserInputType ~= UIT.MouseButton1 and Input.UserInputType ~= UIT.Touch then
@@ -212,13 +272,33 @@ local function BindDrag(Object: GuiObject, Handle: GuiObject?)
 		Dragging = true
 		DragStart = Input.Position
 		StartPosition = Object.Position
+		CurrentDelta = V2(0, 0)
 
 		local Connection
 		Connection = Input.Changed:Connect(function()
 			if Input.UserInputState == Enum.UserInputState.End then
-				Dragging = false
+				StopDrag()
 				Connection:Disconnect()
 			end
+		end)
+
+		if RenderConn then
+			RenderConn:Disconnect()
+		end
+
+		RenderConn = RunService.RenderStepped:Connect(function()
+			if not Dragging then
+				return
+			end
+
+			--@ smooth interpolation toward the latest pointer delta
+			local Target = UD2(
+				StartPosition.X.Scale,
+				StartPosition.X.Offset + CurrentDelta.X,
+				StartPosition.Y.Scale,
+				StartPosition.Y.Offset + CurrentDelta.Y
+			)
+			Object.Position = Object.Position:Lerp(Target, 0.35)
 		end)
 	end)
 
@@ -227,8 +307,22 @@ local function BindDrag(Object: GuiObject, Handle: GuiObject?)
 			return
 		end
 
-		local Delta = Input.Position - DragStart
-		Object.Position = UD2(StartPosition.X.Scale, StartPosition.X.Offset + Delta.X, StartPosition.Y.Scale, StartPosition.Y.Offset + Delta.Y)
+		CurrentDelta = V2(Input.Position.X - DragStart.X, Input.Position.Y - DragStart.Y)
+	end)
+
+	UserInputService.InputEnded:Connect(function(Input)
+		if Input.UserInputType == UIT.MouseButton1 or Input.UserInputType == UIT.Touch then
+			if Dragging then
+				--@ snap to final position without residual lag
+				Object.Position = UD2(
+					StartPosition.X.Scale,
+					StartPosition.X.Offset + CurrentDelta.X,
+					StartPosition.Y.Scale,
+					StartPosition.Y.Offset + CurrentDelta.Y
+				)
+				StopDrag()
+			end
+		end
 	end)
 end
 
@@ -292,6 +386,262 @@ local function ReleasePopup(Element: {})
 	end
 end
 
+--@ section drag state
+local SectionDrag = {
+	Active = false,
+	Section = nil :: any,
+	Ghost = nil :: Frame?,
+	Placeholder = nil :: Frame?,
+	SourceParent = nil :: Frame?,
+	SourceOrder = 0,
+	TargetParent = nil :: Frame?,
+	TargetOrder = 0,
+	Offset = V2(0, 0),
+	RenderConn = nil :: RBXScriptConnection?,
+}
+
+local function ClearSectionDragVisuals()
+	if SectionDrag.Ghost then
+		SectionDrag.Ghost:Destroy()
+		SectionDrag.Ghost = nil
+	end
+	if SectionDrag.Placeholder then
+		SectionDrag.Placeholder:Destroy()
+		SectionDrag.Placeholder = nil
+	end
+end
+
+local function StopSectionDrag(Commit: boolean)
+	if not SectionDrag.Active then
+		return
+	end
+
+	SectionDrag.Active = false
+
+	if SectionDrag.RenderConn then
+		SectionDrag.RenderConn:Disconnect()
+		SectionDrag.RenderConn = nil
+	end
+
+	local Section = SectionDrag.Section
+	if not Section then
+		ClearSectionDragVisuals()
+		return
+	end
+
+	local Frame = Section.Frame
+
+	if Commit and SectionDrag.TargetParent then
+		Frame.Parent = SectionDrag.TargetParent
+		Frame.LayoutOrder = SectionDrag.TargetOrder
+		Section.Side = SectionDrag.TargetParent.Name
+		Frame.BackgroundTransparency = 0
+		Frame.Visible = true
+
+		local Siblings = {}
+		for _, Child in SectionDrag.TargetParent:GetChildren() do
+			if Child:IsA("Frame") and Child.Name == "Section" and Child ~= Frame then
+				TIS(Siblings, Child)
+			end
+		end
+		table.sort(Siblings, function(a, b)
+			return a.LayoutOrder < b.LayoutOrder
+		end)
+
+		local Order = 0
+		for _, Sibling in Siblings do
+			if Order == SectionDrag.TargetOrder then
+				Order += 1
+			end
+			Sibling.LayoutOrder = Order
+			Order += 1
+		end
+		Frame.LayoutOrder = SectionDrag.TargetOrder
+	else
+		Frame.Parent = SectionDrag.SourceParent
+		Frame.LayoutOrder = SectionDrag.SourceOrder
+		Frame.BackgroundTransparency = 0
+		Frame.Visible = true
+	end
+
+	ClearSectionDragVisuals()
+	SectionDrag.Section = nil
+	SectionDrag.SourceParent = nil
+	SectionDrag.TargetParent = nil
+end
+
+local function GetColumnAtPosition(PageFrame: Frame, ScreenPos: Vector2): Frame?
+	local Left = PageFrame:FindFirstChild("Left")
+	local Right = PageFrame:FindFirstChild("Right")
+	if not Left or not Right then
+		return nil
+	end
+
+	local MidX = (Left.AbsolutePosition.X + Left.AbsoluteSize.X + Right.AbsolutePosition.X) * 0.5
+	if ScreenPos.X < MidX then
+		return Left :: Frame
+	end
+	return Right :: Frame
+end
+
+local function ComputeInsertOrder(Column: Frame, ScreenY: number, Exclude: Frame?): number
+	local Candidates = {}
+	for _, Child in Column:GetChildren() do
+		if Child:IsA("Frame") and Child.Name == "Section" and Child ~= Exclude and Child.Visible then
+			TIS(Candidates, Child)
+		end
+	end
+	table.sort(Candidates, function(a, b)
+		return a.AbsolutePosition.Y < b.AbsolutePosition.Y
+	end)
+
+	for _, Child in Candidates do
+		local Mid = Child.AbsolutePosition.Y + Child.AbsoluteSize.Y * 0.5
+		if ScreenY < Mid then
+			return Child.LayoutOrder
+		end
+	end
+
+	if #Candidates > 0 then
+		return Candidates[#Candidates].LayoutOrder + 1
+	end
+	return 0
+end
+
+local function UpdateSectionDrag(MousePos: Vector2)
+	if not SectionDrag.Active or not SectionDrag.Section then
+		return
+	end
+
+	local Section = SectionDrag.Section
+	local Frame = Section.Frame
+	local PageFrame = Section.PageFrame
+	if not PageFrame then
+		return
+	end
+
+	if SectionDrag.Ghost then
+		local Target = UFO(MousePos.X - SectionDrag.Offset.X, MousePos.Y - SectionDrag.Offset.Y)
+		SectionDrag.Ghost.Position = SectionDrag.Ghost.Position:Lerp(Target, 0.45)
+	end
+
+	local Column = GetColumnAtPosition(PageFrame, MousePos)
+	if not Column then
+		return
+	end
+
+	local InsertOrder = ComputeInsertOrder(Column, MousePos.Y, Frame)
+	SectionDrag.TargetParent = Column
+	SectionDrag.TargetOrder = InsertOrder
+
+	if not SectionDrag.Placeholder then
+		local Placeholder = Add("Frame", {
+			Name = "SectionPlaceholder";
+			BackgroundColor3 = RGB(78, 88, 129);
+			BackgroundTransparency = 0.55;
+			BorderSizePixel = 0;
+			Size = UFS(1, 0);
+			AutomaticSize = AS.Y;
+			ZIndex = 5;
+		}) :: Frame
+		Add("UICorner", { Parent = Placeholder; CornerRadius = UD(0, 5); })
+		Add("UIStroke", {
+			Parent = Placeholder;
+			ApplyStrokeMode = ASM.Border;
+			Color = RGB(138, 156, 229);
+			Thickness = 1.5;
+			Transparency = 0.25;
+		})
+		local Height = math.max(Frame.AbsoluteSize.Y, 60)
+		Add("Frame", {
+			Parent = Placeholder;
+			BackgroundTransparency = 1;
+			Size = UD2(1, 0, 0, Height);
+		})
+		SectionDrag.Placeholder = Placeholder
+	end
+
+	local Placeholder = SectionDrag.Placeholder
+	if Placeholder.Parent ~= Column then
+		Placeholder.Parent = Column
+	end
+	Placeholder.LayoutOrder = InsertOrder
+	Placeholder.Visible = true
+end
+
+local function BeginSectionDrag(Section: any, Input: InputObject)
+	if SectionDrag.Active then
+		return
+	end
+
+	local Frame = Section.Frame
+	if not Frame:FindFirstChild("Header") then
+		return
+	end
+
+	SectionDrag.Active = true
+	SectionDrag.Section = Section
+	SectionDrag.SourceParent = Frame.Parent :: Frame
+	SectionDrag.SourceOrder = Frame.LayoutOrder
+	SectionDrag.TargetParent = SectionDrag.SourceParent
+	SectionDrag.TargetOrder = SectionDrag.SourceOrder
+	SectionDrag.Offset = V2(
+		Input.Position.X - Frame.AbsolutePosition.X,
+		Input.Position.Y - Frame.AbsolutePosition.Y
+	)
+
+	Frame.Visible = false
+
+	local Ghost = Frame:Clone()
+	Ghost.Name = "SectionGhost"
+	Ghost.Parent = Library._Instance
+	Ghost.Visible = true
+	Ghost.BackgroundTransparency = 0.25
+	Ghost.Size = UFO(Frame.AbsoluteSize.X, Frame.AbsoluteSize.Y)
+	Ghost.Position = UFO(Frame.AbsolutePosition.X, Frame.AbsolutePosition.Y)
+	Ghost.ZIndex = PopupZ + 5
+	Ghost.AutomaticSize = AS.None
+
+	for _, Desc in Ghost:GetDescendants() do
+		if Desc:IsA("GuiObject") then
+			if Desc:IsA("TextLabel") or Desc:IsA("TextButton") or Desc:IsA("TextBox") then
+				Desc.TextTransparency = math.min(Desc.TextTransparency + 0.35, 0.85)
+			elseif Desc:IsA("ImageLabel") or Desc:IsA("ImageButton") then
+				Desc.ImageTransparency = math.min(Desc.ImageTransparency + 0.35, 0.85)
+			elseif Desc:IsA("Frame") and Desc.BackgroundTransparency < 1 then
+				Desc.BackgroundTransparency = math.min(Desc.BackgroundTransparency + 0.2, 0.9)
+			end
+		end
+	end
+
+	SectionDrag.Ghost = Ghost
+
+	if SectionDrag.RenderConn then
+		SectionDrag.RenderConn:Disconnect()
+	end
+
+	SectionDrag.RenderConn = RunService.RenderStepped:Connect(function()
+		if not SectionDrag.Active then
+			return
+		end
+		local Mouse = UserInputService:GetMouseLocation()
+		local GuiService = Services:GetService("GuiService")
+		local Inset = GuiService:GetGuiInset()
+		UpdateSectionDrag(V2(Mouse.X, Mouse.Y - Inset.Y))
+	end)
+
+	UpdateSectionDrag(V2(Input.Position.X, Input.Position.Y))
+end
+
+UserInputService.InputEnded:Connect(function(Input)
+	if Input.UserInputType ~= UIT.MouseButton1 and Input.UserInputType ~= UIT.Touch then
+		return
+	end
+	if SectionDrag.Active then
+		StopSectionDrag(true)
+	end
+end)
+
 --@ section
 --@ built against whichever container holds the Left and Right columns, so a page and a
 --@ sub page can both hand out sections without duplicating any of this
@@ -304,21 +654,141 @@ local function SectionBuilder(Container: Frame)
 		}, propertyTable or {})
 		setmetatable(Section, { __index = Library.Elements })
 
-		local SectionFrame = Add("Frame", { Parent = Container[Section.Side]; Name = "Section"; AutomaticSize = AS.Y; BackgroundColor3 = RGB(15, 14, 15); BorderColor3 = RGB(0, 0, 0); BorderSizePixel = 0; Size = UFS(1, 0); }) :: Frame
-		local Header = Add("Frame", { Parent = SectionFrame; Name = "Header"; BackgroundColor3 = RGB(20, 20, 21); BorderColor3 = RGB(0, 0, 0); BorderSizePixel = 0; Size = UD2(1, 0, 0, 35); }) :: Frame
-		local Elements = Add("Frame", { Parent = SectionFrame; Name = "Elements"; AutomaticSize = AS.Y; BackgroundColor3 = RGB(255, 255, 255); BackgroundTransparency = 1; BorderColor3 = RGB(0, 0, 0); BorderSizePixel = 0; Position = UFO(0, 35); Size = UFS(1, 0); }) :: Frame
+		local Column = Container[Section.Side]
+		local NextOrder = 0
+		for _, Child in Column:GetChildren() do
+			if Child:IsA("Frame") and Child.Name == "Section" then
+				NextOrder = math.max(NextOrder, Child.LayoutOrder + 1)
+			end
+		end
+
+		local SectionFrame = Add("Frame", {
+			Parent = Column;
+			Name = "Section";
+			AutomaticSize = AS.Y;
+			BackgroundColor3 = RGB(15, 14, 15);
+			BorderColor3 = RGB(0, 0, 0);
+			BorderSizePixel = 0;
+			Size = UFS(1, 0);
+			LayoutOrder = NextOrder;
+		}) :: Frame
+		local Header = Add("Frame", {
+			Parent = SectionFrame;
+			Name = "Header";
+			BackgroundColor3 = RGB(20, 20, 21);
+			BorderColor3 = RGB(0, 0, 0);
+			BorderSizePixel = 0;
+			Size = UD2(1, 0, 0, 35);
+		}) :: Frame
+		local Elements = Add("Frame", {
+			Parent = SectionFrame;
+			Name = "Elements";
+			AutomaticSize = AS.Y;
+			BackgroundColor3 = RGB(255, 255, 255);
+			BackgroundTransparency = 1;
+			BorderColor3 = RGB(0, 0, 0);
+			BorderSizePixel = 0;
+			Position = UFO(0, 35);
+			Size = UFS(1, 0);
+		}) :: Frame
 		Add("UICorner", { Parent = SectionFrame; CornerRadius = UD(0, 5); })
 		Add("UICorner", { Parent = Header; BottomLeftRadius = UD(0, 0); BottomRightRadius = UD(0, 0); TopLeftRadius = UD(0, 5); TopRightRadius = UD(0, 5); })
-		Add("ImageLabel", { Parent = Header; Name = "Icon"; BackgroundColor3 = RGB(255, 255, 255); BackgroundTransparency = 1; BorderColor3 = RGB(0, 0, 0); BorderSizePixel = 0; Image = "rbxassetid://" .. tostring(Section.Icon); Position = UFS(0, 0.5); Size = UFO(16, 16); })
-		Add("UIListLayout", { Parent = Header; FillDirection = FD.Horizontal; Padding = UD(0, 5); SortOrder = SO.LayoutOrder; VerticalAlignment = VFA.Center; })
+		Add("ImageLabel", {
+			Parent = Header;
+			Name = "Icon";
+			BackgroundColor3 = RGB(255, 255, 255);
+			BackgroundTransparency = 1;
+			BorderColor3 = RGB(0, 0, 0);
+			BorderSizePixel = 0;
+			Image = "rbxassetid://" .. tostring(Section.Icon);
+			Position = UFS(0, 0.5);
+			Size = UFO(16, 16);
+		})
+		Add("UIListLayout", {
+			Parent = Header;
+			FillDirection = FD.Horizontal;
+			Padding = UD(0, 5);
+			SortOrder = SO.LayoutOrder;
+			VerticalAlignment = VFA.Center;
+		})
 		Add("UIPadding", { Parent = Header; PaddingLeft = UD(0, 10); })
-		Add("TextLabel", { Parent = Header; Name = "Title"; AutomaticSize = AS.XY; BackgroundColor3 = RGB(255, 255, 255); BackgroundTransparency = 1; BorderColor3 = RGB(0, 0, 0); BorderSizePixel = 0; FontFace = FN("rbxassetid://12187365364", FW.SemiBold, FS.Normal); LayoutOrder = 1; Text = Section.Name; TextColor3 = RGB(255, 255, 255); TextSize = 14; })
+		Add("TextLabel", {
+			Parent = Header;
+			Name = "Title";
+			AutomaticSize = AS.XY;
+			BackgroundColor3 = RGB(255, 255, 255);
+			BackgroundTransparency = 1;
+			BorderColor3 = RGB(0, 0, 0);
+			BorderSizePixel = 0;
+			FontFace = FN("rbxassetid://12187365364", FW.SemiBold, FS.Normal);
+			LayoutOrder = 1;
+			Text = Section.Name;
+			TextColor3 = RGB(255, 255, 255);
+			TextSize = 14;
+		})
 		Add("UIStroke", { Parent = SectionFrame; ApplyStrokeMode = ASM.Border; Color = RGB(36, 37, 37); })
-		Add("UIPadding", { Parent = Elements; PaddingBottom = UD(0, 10); PaddingLeft = UD(0, 10); PaddingRight = UD(0, 10); PaddingTop = UD(0, 10); })
+		Add("UIPadding", {
+			Parent = Elements;
+			PaddingBottom = UD(0, 10);
+			PaddingLeft = UD(0, 10);
+			PaddingRight = UD(0, 10);
+			PaddingTop = UD(0, 10);
+		})
 		Add("UIListLayout", { Parent = Elements; Padding = UD(0, 10); SortOrder = SO.LayoutOrder; })
 
 		Section.Content = Elements
 		Section.Frame = SectionFrame
+		Section.PageFrame = Container
+		Section.Side = Section.Side
+
+		--@ drag sections by their header; ghost + snap placeholder handle the rest
+		local DragThreshold = 6
+
+		Header.InputBegan:Connect(function(Input)
+			if Input.UserInputType ~= UIT.MouseButton1 and Input.UserInputType ~= UIT.Touch then
+				return
+			end
+			if SectionDrag.Active then
+				return
+			end
+
+			local PressPos = Input.Position
+			local MoveConn: RBXScriptConnection?
+			local EndConn: RBXScriptConnection?
+
+			local function Cleanup()
+				if MoveConn then
+					MoveConn:Disconnect()
+					MoveConn = nil
+				end
+				if EndConn then
+					EndConn:Disconnect()
+					EndConn = nil
+				end
+			end
+
+			MoveConn = UserInputService.InputChanged:Connect(function(MoveInput)
+				if MoveInput.UserInputType ~= UIT.MouseMovement and MoveInput.UserInputType ~= UIT.Touch then
+					return
+				end
+				if SectionDrag.Active then
+					Cleanup()
+					return
+				end
+
+				local Delta = (MoveInput.Position - PressPos).Magnitude
+				if Delta >= DragThreshold then
+					Cleanup()
+					BeginSectionDrag(Section, MoveInput)
+				end
+			end)
+
+			EndConn = Input.Changed:Connect(function()
+				if Input.UserInputState == Enum.UserInputState.End then
+					Cleanup()
+				end
+			end)
+		end)
 
 		TIS(Library.Sections, Section)
 		return Section
