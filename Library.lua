@@ -1,4 +1,3 @@
---@ was forked from a guy named wsh from the v3rm threads, i just added some things. but credit to him.
 
 
 --@ abbreviations
@@ -3291,31 +3290,32 @@ end
 
 Library._NotifyOrder = 0
 Library._Toasts = {}
-Library.MaxNotifications = 5
+Library.MaxNotifications = 4
 Library.NotifyToggles = true
 
+--@ AirFlow-style notifications
 Library.Notify = function(propertyTable: {})
 	local Props = Overwrite({
 		Title = "Notification";
 		Text = "";
 		Content = nil;
-		Duration = 3.5;
+		Duration = 4;
 		Type = "Info";
+		Icon = nil;
 	}, propertyTable or {})
 
-	local Content = Props.Content or Props.Text or ""
-	local Duration = Props.Duration or 3.5
+	local Content = Props.Content or Props.Text or Props.Message or ""
+	local Duration = Props.Duration or 4
 	local T = Library.Theme
 
-	local TypeColor = T.Accent
+	--@ type colors (AirFlow `an` table)
+	local TypeColor = T.Text
 	if Props.Type == "Success" then
 		TypeColor = RGB(150, 220, 170)
 	elseif Props.Type == "Warning" or Props.Type == "Warn" then
 		TypeColor = RGB(240, 176, 108)
 	elseif Props.Type == "Error" then
 		TypeColor = RGB(240, 120, 120)
-	elseif Props.Type == "Info" then
-		TypeColor = T.Text
 	end
 
 	local Gui = EnsureOverlayGui()
@@ -3324,7 +3324,7 @@ Library.Notify = function(propertyTable: {})
 			Parent = Gui;
 			Name = "Notifications";
 			BackgroundTransparency = 1;
-			Size = UFO(280, 0);
+			Size = UFO(300, 0);
 			AutomaticSize = AS.Y;
 			ZIndex = 200;
 		})
@@ -3357,6 +3357,8 @@ Library.Notify = function(propertyTable: {})
 	end
 
 	Library._NotifyOrder = (Library._NotifyOrder or 0) + 1
+
+	--@ outer slot (drives height collapse on dismiss)
 	local Slot = Add("Frame", {
 		Parent = Library._NotifyHost;
 		Size = UD2(1, 0, 0, 0);
@@ -3365,19 +3367,22 @@ Library.Notify = function(propertyTable: {})
 		ClipsDescendants = true;
 	})
 
-	local SlideDir = (Pos:find("Left") and -1) or 1
+	local SlideDir = (string.find(Pos, "Left") and -1) or 1
+
+	--@ sliding shell
 	local Shell = Add("Frame", {
 		Parent = Slot;
-		Position = UFO(300 * SlideDir, 0);
+		Position = UFO(320 * SlideDir, 0);
 		Size = UD2(1, 0, 0, 0);
 		AutomaticSize = AS.Y;
 		BackgroundTransparency = 1;
 	})
 
+	--@ soft drop shadow (AirFlow asset)
 	local Shadow = Add("ImageLabel", {
 		Parent = Shell;
-		Position = UFO(-16, -16);
-		Size = UD2(1, 32, 1, 32);
+		Position = UFO(-20, -20);
+		Size = UD2(1, 40, 1, 40);
 		BackgroundTransparency = 1;
 		Image = "rbxassetid://6014261993";
 		ImageColor3 = RGB(0, 0, 0);
@@ -3387,102 +3392,148 @@ Library.Notify = function(propertyTable: {})
 		ZIndex = 0;
 	})
 
+	--@ card
 	local Card = Add("CanvasGroup", {
 		Parent = Shell;
 		Size = UD2(1, 0, 0, 0);
 		AutomaticSize = AS.Y;
-		BackgroundColor3 = T.Background or RGB(9, 8, 8);
+		BackgroundColor3 = T.Background or RGB(14, 14, 16);
 		BorderSizePixel = 0;
 		GroupTransparency = 1;
 		ZIndex = 1;
 	})
-	Add("UICorner", { Parent = Card; CornerRadius = UD(0, 8); })
+	Add("UICorner", { Parent = Card; CornerRadius = UD(0, 10); })
 	local CardStroke = Add("UIStroke", {
 		Parent = Card;
 		ApplyStrokeMode = ASM.Border;
-		Color = T.Border or RGB(36, 37, 37);
+		Color = T.Border or RGB(30, 30, 36);
 		Thickness = 1;
 	})
 
-	--@ top hairline like main menu sections
+	--@ top hairline (AirFlow M())
 	Add("Frame", {
 		Parent = Card;
 		Size = UD2(1, 0, 0, 1);
 		BackgroundColor3 = RGB(255, 255, 255);
-		BackgroundTransparency = 0.94;
+		BackgroundTransparency = 0.93;
 		BorderSizePixel = 0;
 		ZIndex = 2;
 	})
 
+	--@ accent corner glow (AirFlow x())
+	local Glow = Add("ImageLabel", {
+		Parent = Card;
+		AnchorPoint = V2(1, 0);
+		Position = UD2(1, -10, 0, -10);
+		Size = UFO(260, 120);
+		BackgroundTransparency = 1;
+		Image = "rbxassetid://8992230677";
+		ImageColor3 = T.Accent;
+		ImageTransparency = 0.86;
+		ZIndex = 0;
+	})
+	Add("UIGradient", {
+		Parent = Glow;
+		Color = CS{ CSK(0, RGB(255, 255, 255)), CSK(1, T.Accent) };
+		Rotation = 90;
+	})
+
 	local Body = Add("Frame", {
 		Parent = Card;
-		BackgroundTransparency = 1;
 		Size = UD2(1, 0, 0, 0);
 		AutomaticSize = AS.Y;
+		BackgroundTransparency = 1;
 		ZIndex = 3;
 	})
 	Add("UIPadding", {
 		Parent = Body;
-		PaddingLeft = UD(0, 14);
-		PaddingRight = UD(0, 12);
-		PaddingTop = UD(0, 12);
-		PaddingBottom = UD(0, 16);
+		PaddingLeft = UD(0, 16);
+		PaddingRight = UD(0, 16);
+		PaddingTop = UD(0, 14);
+		PaddingBottom = UD(0, 24);
 	})
 
-	local Title = Add("TextLabel", {
+	local LeftPad = 0
+	if Props.Icon then
+		local IconWrap = Add("Frame", {
+			Parent = Body;
+			AnchorPoint = V2(0, 0);
+			Position = UFO(0, 8);
+			Size = UFO(16, 16);
+			BackgroundTransparency = 1;
+			ZIndex = 4;
+		})
+		local IconImg = Add("ImageLabel", {
+			Parent = IconWrap;
+			Size = UFS(1, 1);
+			BackgroundTransparency = 1;
+			ImageColor3 = (TypeColor == T.Text) and T.Accent or TypeColor;
+			ScaleType = SCL.Fit;
+		})
+		pcall(function()
+			IconImg.Image = ResolveIcon(Props.Icon)
+		end)
+		LeftPad = 24
+	end
+
+	Add("TextLabel", {
 		Parent = Body;
 		BackgroundTransparency = 1;
-		Size = UD2(1, -22, 0, 15);
+		Position = UFO(LeftPad, 0);
+		Size = UD2(1, -28 - LeftPad, 0, 16);
 		FontFace = FN("rbxassetid://12187365364", FW.SemiBold, FS.Normal);
-		Text = Props.Title;
+		Text = Props.Title or "Notification";
 		TextColor3 = TypeColor;
-		TextSize = 13;
+		TextSize = 14;
 		TextXAlignment = TXA.Left;
+		ZIndex = 4;
 	})
 
 	local Close = Add("TextButton", {
 		Parent = Body;
 		AnchorPoint = V2(1, 0);
-		Position = UD2(1, 4, 0, -2);
-		Size = UFO(20, 20);
+		Position = UD2(1, 6, 0, -5);
+		Size = UFO(24, 24);
 		BackgroundTransparency = 1;
 		Text = "x";
-		TextColor3 = RGB(140, 144, 155);
-		TextSize = 13;
+		TextColor3 = RGB(160, 160, 165);
+		TextSize = 18;
 		FontFace = FN("rbxassetid://12187365364", FW.SemiBold, FS.Normal);
 		AutoButtonColor = false;
-		ZIndex = 4;
+		ZIndex = 5;
 	})
 	Close.MouseEnter:Connect(function()
-		Tween(Close, { TextColor3 = T.Text }, 0.12)
+		Tween(Close, { TextColor3 = T.Text }, 0.15)
 	end)
 	Close.MouseLeave:Connect(function()
-		Tween(Close, { TextColor3 = RGB(140, 144, 155) }, 0.15)
+		Tween(Close, { TextColor3 = RGB(160, 160, 165) }, 0.2)
 	end)
 
 	if Content ~= "" then
 		Add("TextLabel", {
 			Parent = Body;
 			BackgroundTransparency = 1;
-			Position = UFO(0, 18);
-			Size = UD2(1, 0, 0, 0);
+			Position = UFO(LeftPad, 21);
+			Size = UD2(1, -LeftPad, 0, 0);
 			AutomaticSize = AS.Y;
 			FontFace = FN("rbxassetid://12187365364", FW.SemiBold, FS.Normal);
 			Text = Content;
-			TextColor3 = RGB(160, 164, 175);
-			TextSize = 12;
+			TextColor3 = RGB(160, 160, 165);
+			TextSize = 13;
 			TextWrapped = true;
 			TextXAlignment = TXA.Left;
 			TextYAlignment = TYA.Top;
+			ZIndex = 4;
 		})
 	end
 
+	--@ progress bar
 	local BarBG = Add("Frame", {
 		Parent = Card;
 		AnchorPoint = V2(0, 1);
-		Position = UD2(0, 14, 1, -7);
-		Size = UD2(1, -28, 0, 2);
-		BackgroundColor3 = T.SurfaceAlt or RGB(20, 20, 21);
+		Position = UD2(0, 16, 1, -8);
+		Size = UD2(1, -32, 0, 3);
+		BackgroundColor3 = T.SurfaceAlt or RGB(33, 33, 35);
 		BorderSizePixel = 0;
 		ZIndex = 5;
 	})
@@ -3494,21 +3545,18 @@ Library.Notify = function(propertyTable: {})
 		BorderSizePixel = 0;
 	})
 	Add("UICorner", { Parent = Bar; CornerRadius = UD(1, 0); })
-	Add("UIGradient", {
-		Parent = Bar;
-		Color = CS{ CSK(0, T.AccentDark or T.Accent), CSK(1, T.Accent) };
-	})
 
 	task.defer(function()
 		if Slot.Parent then
-			local H = math.max(Card.AbsoluteSize.Y, 44)
-			Tween(Slot, { Size = UD2(1, 0, 0, H) }, 0.32, ES.Quint)
+			local H = math.max(Card.AbsoluteSize.Y, 52)
+			Tween(Slot, { Size = UD2(1, 0, 0, H) }, 0.3, ES.Quint)
 		end
 	end)
 
-	Tween(Shell, { Position = UFO(0, 0) }, 0.45, ES.Back)
-	Tween(Card, { GroupTransparency = 0 }, 0.28)
-	Tween(Shadow, { ImageTransparency = 0.62 }, 0.35)
+	--@ AirFlow animation: slide in (Back), fade card, shadow, drain bar
+	Tween(Shell, { Position = UFO(0, 0) }, 0.5, ES.Back)
+	Tween(Card, { GroupTransparency = 0 }, 0.3)
+	Tween(Shadow, { ImageTransparency = 0.6 }, 0.4)
 	Tween(Bar, { Size = UD2(0, 0, 1, 0) }, Duration, ES.Linear)
 
 	local Closed = false
@@ -3521,13 +3569,14 @@ Library.Notify = function(propertyTable: {})
 				break
 			end
 		end
-		Tween(Shell, { Position = UFO(300 * SlideDir, 0) }, 0.28, ES.Quint)
+		Tween(Shell, { Position = UFO(320 * SlideDir, 0) }, 0.3, ES.Quint)
 		Tween(Card, { GroupTransparency = 1 }, 0.2)
+		Tween(CardStroke, { Transparency = 1 }, 0.15)
 		Tween(Shadow, { ImageTransparency = 1 }, 0.2)
 		task.delay(0.22, function()
 			Slot.ClipsDescendants = true
-			Tween(Slot, { Size = UD2(1, 0, 0, 0) }, 0.2, ES.Quint)
-			task.delay(0.22, function()
+			Tween(Slot, { Size = UD2(1, 0, 0, -4) }, 0.22, ES.Quint)
+			task.delay(0.24, function()
 				Slot:Destroy()
 			end)
 		end)
@@ -3537,7 +3586,7 @@ Library.Notify = function(propertyTable: {})
 	Close.Activated:Connect(Dismiss)
 	TIS(Library._Toasts, Dismiss)
 
-	while #Library._Toasts > Library.MaxNotifications do
+	while #Library._Toasts > (Library.MaxNotifications or 4) do
 		local Oldest = table.remove(Library._Toasts, 1)
 		if Oldest then Oldest() end
 	end
@@ -3690,34 +3739,37 @@ Library.BuildConfigPage = function(self: Library, Window: any)
 	end
 
 	local ConfigInput = ActionsSection:Input({
-		Name = "Config Name";
+		Name = "New name (for Save)";
 		Value = "default";
 		Placeholder = "name";
 		Flag = "ConfigName";
-		Callback = function(Value)
-			Selected.Name = Value
-		end;
+		--@ does NOT change list selection — only used when saving a new/overwrite name
 	})
 
-	local function CurrentName(): string
-		local Name = ConfigInput.Value
-		if not Name or Name == "" then
-			Name = Selected.Name or "default"
+	--@ Save can use the text box (new name). Load / Delete / Autoload use the *selected list row only*.
+	local function SelectedName(): string?
+		return Selected.Name
+	end
+
+	local function SaveName(): string
+		local Name = ConfigInput and ConfigInput.Value
+		if type(Name) == "string" and Name ~= "" then
+			return Name
 		end
-		return Name
+		return Selected.Name or "default"
 	end
 
 	ActionsSection:Button({
 		Name = "Save";
 		Width = 0.5;
 		Callback = function()
-			local Name = CurrentName()
+			local Name = SaveName()
 			if Library.SaveConfig(Name) then
 				SelectConfig(Name)
 				RebuildList()
-				Library.Notify({ Title = "Config"; Text = "Saved " .. Name; Type = "Success" })
+				Library.Notify({ Title = "Config"; Content = "Saved " .. Name; Type = "Success" })
 			else
-				Library.Notify({ Title = "Config"; Text = "Save failed — executor FS?"; Type = "Error" })
+				Library.Notify({ Title = "Config"; Content = "Save failed — executor FS?"; Type = "Error" })
 			end
 		end;
 	})
@@ -3725,13 +3777,17 @@ Library.BuildConfigPage = function(self: Library, Window: any)
 		Name = "Load";
 		Width = 0.5;
 		Callback = function()
-			local Name = CurrentName()
+			local Name = SelectedName()
+			if not Name then
+				Library.Notify({ Title = "Config"; Content = "Select a config in the list first"; Type = "Warning" })
+				return
+			end
 			if Library.LoadConfig(Name) then
 				Library.ApplyTheme()
 				SelectConfig(Name)
-				Library.Notify({ Title = "Config"; Text = "Loaded " .. Name; Type = "Success" })
+				Library.Notify({ Title = "Config"; Content = "Loaded " .. Name; Type = "Success" })
 			else
-				Library.Notify({ Title = "Config"; Text = "Failed to load " .. Name; Type = "Error" })
+				Library.Notify({ Title = "Config"; Content = "Failed to load " .. Name; Type = "Error" })
 			end
 		end;
 	})
@@ -3739,11 +3795,15 @@ Library.BuildConfigPage = function(self: Library, Window: any)
 		Name = "Delete";
 		Width = 0.5;
 		Callback = function()
-			local Name = CurrentName()
+			local Name = SelectedName()
+			if not Name then
+				Library.Notify({ Title = "Config"; Content = "Select a config in the list first"; Type = "Warning" })
+				return
+			end
 			Library.DeleteConfig(Name)
 			Selected.Name = nil
 			RebuildList()
-			Library.Notify({ Title = "Config"; Text = "Deleted " .. Name; Type = "Info" })
+			Library.Notify({ Title = "Config"; Content = "Deleted " .. Name; Type = "Info" })
 		end;
 	})
 	ActionsSection:Button({
@@ -3751,15 +3811,19 @@ Library.BuildConfigPage = function(self: Library, Window: any)
 		Width = 0.5;
 		Callback = function()
 			RebuildList()
-			Library.Notify({ Title = "Config"; Text = "List refreshed"; Type = "Info"; Duration = 1.5 })
+			Library.Notify({ Title = "Config"; Content = "List refreshed"; Type = "Info"; Duration = 1.5 })
 		end;
 	})
 	ActionsSection:Button({
 		Name = "Set autoload";
 		Callback = function()
-			local Name = CurrentName()
+			local Name = SelectedName()
+			if not Name then
+				Library.Notify({ Title = "Config"; Content = "Select a config in the list first"; Type = "Warning" })
+				return
+			end
 			Library.SetAutoload(Name)
-			Library.Notify({ Title = "Config"; Text = "Autoload → " .. Name; Type = "Success" })
+			Library.Notify({ Title = "Config"; Content = "Autoload set to " .. Name; Type = "Success" })
 		end;
 	})
 
