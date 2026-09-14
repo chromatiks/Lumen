@@ -1127,7 +1127,7 @@ Library.Elements.Slider = function(self: Library, propertyTable: {})
 		Increment = 0.1,
 		Max = 1,
 		Min = 0,
-		Callback = print
+		Callback = function() end
 	}, propertyTable or {})
 
 	local Decimals = MM(#(tostring(Slider.Increment):match("%.(%d+)") or ""), 4)
@@ -1181,7 +1181,7 @@ Library.Elements.Dropdown = function(self: Library, propertyTable: {})
 		Value = "",
 		Multi = false,
 		Search = false,
-		Callback = print,
+		Callback = function() end,
 	}, propertyTable or {})
 
 	local OptionList = Add("TextButton", { Parent = Library._Instance; Name = "Options"; AutoButtonColor = false; AutomaticSize = AS.Y; BackgroundColor3 = RGB(15, 14, 15); BorderColor3 = RGB(0, 0, 0); BorderSizePixel = 0; Position = UFS(0.3761225640773773, 0.42204996943473816); Size = UFO(253, 0); Text = ""; Visible = false; ZIndex = PopupZ; }) :: TextButton
@@ -1442,7 +1442,7 @@ Library.Elements.Input = function(self: Library, propertyTable: {})
 		Name = "",
 		Value = "",
 		Placeholder = "",
-		Callback = print,
+		Callback = function() end,
 	}, propertyTable or {})
 
 	local TextBox = Add("Frame", { Parent = self.Content; Name = "TextBox"; AutomaticSize = AS.Y; BackgroundColor3 = RGB(255, 255, 255); BackgroundTransparency = 1; BorderColor3 = RGB(0, 0, 0); BorderSizePixel = 0; Size = UFS(1, 0); }) :: Frame
@@ -1484,7 +1484,7 @@ end
 Library.Elements.Button = function(self: Library, propertyTable: {})
 	local Button = Overwrite({
 		Name = "Button";
-		Callback = print;
+		Callback = function() end;
 		Height = 30;
 		Width = 1;
 	}, propertyTable or {})
@@ -1634,7 +1634,7 @@ end
 Library.SubElements.Toggle = function(self: Library, propertyTable: {})
 	local Toggle = Overwrite({
 		State = false,
-		Callback = print
+		Callback = function() end
 	}, propertyTable or {})
 
 	local Button = Add("TextButton", { Parent = self.LeftContent; Name = "Toggle"; AutoButtonColor = false; BackgroundColor3 = RGB(20, 20, 21); BorderColor3 = RGB(0, 0, 0); BorderSizePixel = 0; FontFace = FN("rbxasset://fonts/families/SourceSansPro.json", FW.Regular, FS.Normal); Size = UFO(28, 14); Text = ""; TextColor3 = RGB(0, 0, 0); TextSize = 14; }) :: TextButton
@@ -1690,7 +1690,7 @@ Library.SubElements.Keybind = function(self: Library, propertyTable: {})
 		Title = "",
 		State = false,
 		Type = "Toggle",
-		Callback = print,
+		Callback = function() end,
 	}, propertyTable or {})
 
 	local Settings = Add("ImageButton", { Parent = self.RightContent; Name = "Settings"; AutoButtonColor = false; BackgroundColor3 = RGB(255, 255, 255); BackgroundTransparency = 1; BorderColor3 = RGB(0, 0, 0); BorderSizePixel = 0; Image = "rbxassetid://132030186847627"; ImageTransparency = 0.5; ResampleMode = Enum.ResamplerMode.Pixelated; Size = UFO(15, 15); }) :: ImageButton
@@ -1911,7 +1911,7 @@ Library.SubElements.Colorpicker = function(self: Library, propertyTable: {})
 		Title = "",
 		Color = RGB(255, 0, 0),
 		Transparency = 0,
-		Callback = print,
+		Callback = function() end,
 	}, propertyTable or {})
 
 	local Hue, Saturation, Value = Colorpicker.Color:ToHSV()
@@ -1975,6 +1975,11 @@ Library.SubElements.Colorpicker = function(self: Library, propertyTable: {})
 		Tween(AlphaCursor, { AnchorPoint = V2(1 - Colorpicker.Transparency, 0), Position = UD2(1 - Colorpicker.Transparency, 0, 0, -2) }, 0.08)
 
 		Tween(Button, { BackgroundColor3 = Colorpicker.Color, BackgroundTransparency = Colorpicker.Transparency }, 0.15)
+
+		if Colorpicker.Flag and Library.Flags[Colorpicker.Flag] then
+			Library.Flags[Colorpicker.Flag].Value = Colorpicker.Color
+			Library.Flags[Colorpicker.Flag].Transparency = Colorpicker.Transparency
+		end
 
 		Colorpicker.Callback(Colorpicker.Color, Colorpicker.Transparency)
 	end
@@ -2647,6 +2652,9 @@ Library.LoadConfig = function(Name: string)
 	Library.LoadConfigData(Data)
 	if Library.ApplyTheme then
 		Library.ApplyTheme()
+	end
+	if Library.SyncThemePickers then
+		Library.SyncThemePickers()
 	end
 	return true
 end
@@ -3692,19 +3700,20 @@ Library.BuildConfigPage = function(self: Library, Window: any)
 		return Selected.Name
 	end
 
-	local function SaveName(): string
-		local Name = ConfigInput and ConfigInput.Value
-		if type(Name) == "string" and Name ~= "" then
-			return Name
-		end
-		return Selected.Name or "default"
-	end
-
 	ActionsSection:Button({
 		Name = "Save";
 		Width = 0.5;
 		Callback = function()
-			local Name = SaveName()
+			local Name = Selected.Name
+			if not Name or Name == "" then
+				local Typed = ConfigInput and ConfigInput.Value
+				if type(Typed) == "string" and Typed ~= "" then
+					Name = Typed
+				else
+					Library.Notify({ Title = "Config"; Content = "Select a config or type a name"; Type = "Warning" })
+					return
+				end
+			end
 			if Library.SaveConfig(Name) then
 				SelectConfig(Name)
 				RebuildList()
@@ -3725,6 +3734,9 @@ Library.BuildConfigPage = function(self: Library, Window: any)
 			end
 			if Library.LoadConfig(Name) then
 				Library.ApplyTheme()
+				if Library.SyncThemePickers then
+					Library.SyncThemePickers()
+				end
 				SelectConfig(Name)
 				Library.Notify({ Title = "Config"; Content = "Loaded " .. Name; Type = "Success" })
 			else
@@ -3770,21 +3782,23 @@ Library.BuildConfigPage = function(self: Library, Window: any)
 
 	RebuildList()
 
+	local ThemePickers = {}
+
 	local function ThemePicker(LabelText: string, Key: string)
 		local Row = ThemeSection:Label({ Text = LabelText })
-		Row:Colorpicker({
+		local Picker = Row:Colorpicker({
 			Color = Library.Theme[Key];
 			Flag = "Theme" .. Key;
 			Callback = function(Color)
 				Library.Theme[Key] = Color
 				if Key == "Accent" then
-
 					local H, S, V = Color:ToHSV()
 					Library.Theme.AccentDark = HSV(H, S, math.max(V * 0.55, 0.15))
 				end
 				Library.ApplyTheme()
 			end;
 		})
+		ThemePickers[Key] = Picker
 	end
 
 	ThemePicker("Accent", "Accent")
@@ -3794,6 +3808,15 @@ Library.BuildConfigPage = function(self: Library, Window: any)
 	ThemePicker("Border", "Border")
 	ThemePicker("Section border", "SectionBorder")
 	ThemePicker("Text", "Text")
+
+	Library.SyncThemePickers = function()
+		for Key, Picker in pairs(ThemePickers) do
+			local Color = Library.Theme[Key]
+			if Color and Picker and Picker.Set then
+				Picker.Set(Color, 0)
+			end
+		end
+	end
 
 	ThemePrev:Paragraph({
 		Title = "Live theme";
@@ -3806,6 +3829,9 @@ Library.BuildConfigPage = function(self: Library, Window: any)
 				Library.Theme[Key] = Color
 			end
 			Library.ApplyTheme()
+			if Library.SyncThemePickers then
+				Library.SyncThemePickers()
+			end
 			Library.Notify({ Title = "Theme"; Content = "Reset to default"; Type = "Info" })
 		end;
 	})
@@ -3901,6 +3927,9 @@ Library.BuildConfigPage = function(self: Library, Window: any)
 	if Autoload then
 		Library.LoadConfig(Autoload)
 		Library.ApplyTheme()
+		if Library.SyncThemePickers then
+			Library.SyncThemePickers()
+		end
 		SelectConfig(Autoload)
 	end
 
