@@ -1,3 +1,6 @@
+--@ was forked from a guy named wsh from the v3rm threads, i just added some things. but credit to him.
+
+
 --@ abbreviations
 local CSK = ColorSequenceKeypoint.new
 local NSK = NumberSequenceKeypoint.new
