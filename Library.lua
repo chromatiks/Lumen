@@ -3925,6 +3925,14 @@ Library.BuildConfigPage = function(self: Library, Window: any)
 			Library.Unload()
 		end;
 	})
+	if Library.Auth and Library.Auth.Enabled then
+		MenuSection:Button({
+			Name = "Sign out";
+			Callback = function()
+				Library.SignOut()
+			end;
+		})
+	end
 
 	NotifySection:Dropdown({
 		Name = "Position";
@@ -3975,13 +3983,20 @@ local function FormatExpiry(ExpiresAt)
 	local Days = math.floor(Left / 86400)
 	local Hours = math.floor((Left % 86400) / 3600)
 	local Mins = math.floor((Left % 3600) / 60)
+	local Parts = {}
 	if Days > 0 then
-		return string.format("%dd %dh", Days, Hours)
+		table.insert(Parts, string.format("%dd", Days))
 	end
 	if Hours > 0 then
-		return string.format("%dh %dm", Hours, Mins)
+		table.insert(Parts, string.format("%dh", Hours))
 	end
-	return string.format("%dm", math.max(Mins, 1))
+	if Mins > 0 and Days == 0 then
+		table.insert(Parts, string.format("%dm", Mins))
+	end
+	if #Parts == 0 then
+		return "1m"
+	end
+	return table.concat(Parts, " ")
 end
 
 Library.GetKeyExpiryText = function()
@@ -4081,6 +4096,30 @@ local function RunValidate(Key, Finish)
 	end
 end
 
+
+Library.SignOut = function()
+	if not Library.Auth or not Library.Auth.Enabled then
+		return
+	end
+	WriteRememberedKey(nil, false)
+	Library.Auth.Validated = false
+	Library.Auth.Token = nil
+	Library.Auth.ExpiresAt = nil
+	for _, Win in Library.Windows do
+		if Win.Canvas then
+			local Footer = Win.Canvas:FindFirstChild("Footer")
+			if Footer then
+				local Exp = Footer:FindFirstChild("KeyExpiry")
+				if Exp then Exp:Destroy() end
+			end
+			if Library._MountKeySystem then
+				Library._MountKeySystem(Win)
+			end
+		end
+	end
+	Library.Notify({ Title = "Key system"; Content = "Signed out"; Type = "Info"; Duration = 2 })
+end
+
 Library._MountKeySystem = function(Window)
 	if not Library.Auth or not Library.Auth.Enabled or Library.Auth.Validated then
 		return
@@ -4100,6 +4139,21 @@ Library._MountKeySystem = function(Window)
 		end
 	end
 
+	task.defer(function()
+		local Camera = workspace.CurrentCamera
+		if Camera and Canvas.Parent then
+			local Viewport = Camera.ViewportSize
+			local Size = Canvas.AbsoluteSize
+			if Size.X <= 0 then Size = V2(658, 461) end
+			local GuiService = Services:GetService("GuiService")
+			local Inset = GuiService:GetGuiInset()
+			Canvas.Position = ClampToScreen(Canvas, UFO(
+				math.floor((Viewport.X - Size.X) * 0.5),
+				math.floor((Viewport.Y - Inset.Y - Size.Y) * 0.5)
+			))
+		end
+	end)
+
 	local Layer = Add("Frame", {
 		Parent = Canvas;
 		Name = "KeySystem";
@@ -4107,8 +4161,10 @@ Library._MountKeySystem = function(Window)
 		BackgroundColor3 = T.Background or RGB(9, 8, 8);
 		BorderSizePixel = 0;
 		ZIndex = 80;
+		Active = true;
 	})
 	Add("UICorner", { Parent = Layer; CornerRadius = UD(0, 5); })
+	BindDrag(Canvas, Layer, true)
 
 	Add("ImageLabel", {
 		Parent = Layer;
@@ -4224,17 +4280,17 @@ Library._MountKeySystem = function(Window)
 	})
 	Add("UICorner", { Parent = RememberBtn; CornerRadius = UD(0, 4); })
 	Add("UIStroke", { Parent = RememberBtn; Color = T.Border or RGB(36, 37, 37); Thickness = 1; })
-	local Check = Add("ImageLabel", {
+	local Check = Add("Frame", {
 		Parent = RememberBtn;
 		AnchorPoint = V2(0.5, 0.5);
 		Position = UFS(0.5, 0.5);
-		Size = UFO(11, 11);
-		BackgroundTransparency = 1;
-		ImageColor3 = RGB(255, 255, 255);
-		ImageTransparency = RememberOn and 0 or 1;
+		Size = UFO(8, 8);
+		BackgroundColor3 = RGB(255, 255, 255);
+		BackgroundTransparency = RememberOn and 0 or 1;
+		BorderSizePixel = 0;
 		ZIndex = 84;
 	})
-	pcall(function() Check.Image = ResolveIcon("check") end)
+	Add("UICorner", { Parent = Check; CornerRadius = UD(0, 2); })
 	Add("TextLabel", {
 		Parent = RememberRow;
 		Position = UFO(22, 0);
@@ -4250,7 +4306,7 @@ Library._MountKeySystem = function(Window)
 	RememberBtn.Activated:Connect(function()
 		RememberOn = not RememberOn
 		Tween(RememberBtn, { BackgroundColor3 = RememberOn and Library.Theme.Accent or Library.Theme.SurfaceAlt }, 0.12)
-		Tween(Check, { ImageTransparency = RememberOn and 0 or 1 }, 0.12)
+		Tween(Check, { BackgroundTransparency = RememberOn and 0 or 1 }, 0.12)
 	end)
 
 	local Error = Add("TextLabel", {
