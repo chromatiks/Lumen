@@ -2484,7 +2484,6 @@ Library.GetConfig = function()
 		Flags = {};
 		Theme = {};
 		MenuKey = Library.MenuKey and Library.MenuKey.Name or "LeftAlt";
-		Version = 1;
 	}
 
 	for Flag, Entry in Library.Flags do
