@@ -2983,12 +2983,24 @@ Library.SetWatermark = function(Text: string?, Enabled: boolean?)
 	end
 
 	local Title = Chip(CleanText, 1, false)
-	Sep(2)
-	local FpsL = Chip("0 fps", 3, true)
-	Sep(4)
-	local PingL = Chip("0 ms", 5, true)
-	Sep(6)
-	local TimeL = Chip(os.date("%H:%M:%S"), 7, true)
+	local Order = 2
+	if Library.Auth and Library.Auth.Validated and Library.Auth.WatermarkExpiry and Library.Auth.ExpiresAt and Library.FormatExpiry then
+		Sep(Order)
+		Order = Order + 1
+		Chip(Library.FormatExpiry(Library.Auth.ExpiresAt), Order, true)
+		Order = Order + 1
+	end
+	Sep(Order)
+	Order = Order + 1
+	local FpsL = Chip("0 fps", Order, true)
+	Order = Order + 1
+	Sep(Order)
+	Order = Order + 1
+	local PingL = Chip("0 ms", Order, true)
+	Order = Order + 1
+	Sep(Order)
+	Order = Order + 1
+	local TimeL = Chip(os.date("%H:%M:%S"), Order, true)
 
 	Library.Watermark.Frame = Frame
 	Library.Watermark.Label = Title
@@ -3972,7 +3984,7 @@ Library.BuildConfigPage = function(self: Library, Window: any)
 end
 
 
-local function FormatExpiry(ExpiresAt)
+Library.FormatExpiry = function(ExpiresAt)
 	if not ExpiresAt or type(ExpiresAt) ~= "number" then
 		return "Lifetime"
 	end
@@ -4003,7 +4015,7 @@ Library.GetKeyExpiryText = function()
 	if not Library.Auth or not Library.Auth.Validated then
 		return ""
 	end
-	return FormatExpiry(Library.Auth.ExpiresAt)
+	return Library.FormatExpiry(Library.Auth.ExpiresAt)
 end
 
 Library.KeySystem = function(self, propertyTable)
@@ -4164,6 +4176,8 @@ Library._MountKeySystem = function(Window)
 		Active = true;
 	})
 	Add("UICorner", { Parent = Layer; CornerRadius = UD(0, 5); })
+	Add("UIStroke", { Parent = Layer; ApplyStrokeMode = ASM.Border; Color = T.Border or RGB(36, 37, 37); })
+	Library.ThemeLink(Layer, "BackgroundColor3", "Background")
 	BindDrag(Canvas, Layer, true)
 
 	Add("ImageLabel", {
@@ -4194,7 +4208,7 @@ Library._MountKeySystem = function(Window)
 		Size = UD2(1, 0, 0, 28);
 		FontFace = FN("rbxassetid://12187365364", FW.SemiBold, FS.Normal);
 		Text = Opts.Title or "Login";
-		TextColor3 = T.Text;
+		TextColor3 = T.Text or RGB(255, 255, 255);
 		TextSize = 22;
 		ZIndex = 82;
 	})
@@ -4214,11 +4228,13 @@ Library._MountKeySystem = function(Window)
 		Parent = Form;
 		Position = UFO(0, 52);
 		Size = UD2(1, 0, 0, 42);
-		BackgroundColor3 = T.SurfaceAlt or RGB(20, 20, 21);
+		BackgroundColor3 = T.Surface or RGB(15, 14, 15);
 		BorderSizePixel = 0;
 		ZIndex = 82;
 	})
-	Add("UICorner", { Parent = KeyWrap; CornerRadius = UD(0, 8); })
+	Add("UICorner", { Parent = KeyWrap; CornerRadius = UD(0, 6); })
+	Add("UIStroke", { Parent = KeyWrap; ApplyStrokeMode = ASM.Border; Color = T.Border or RGB(36, 37, 37); })
+	Library.ThemeLink(KeyWrap, "BackgroundColor3", "Surface")
 	local KeyIcon = Add("ImageLabel", {
 		Parent = KeyWrap;
 		AnchorPoint = V2(0, 0.5);
@@ -4370,6 +4386,8 @@ Library._MountKeySystem = function(Window)
 		ZIndex = 90;
 	})
 	Add("UICorner", { Parent = Loading; CornerRadius = UD(0, 5); })
+	Add("UIStroke", { Parent = Loading; ApplyStrokeMode = ASM.Border; Color = T.Border or RGB(36, 37, 37); })
+	Library.ThemeLink(Loading, "BackgroundColor3", "Background")
 	local Spin = Add("ImageLabel", {
 		Parent = Loading;
 		AnchorPoint = V2(0.5, 0.5);
@@ -4430,7 +4448,7 @@ Library._MountKeySystem = function(Window)
 				end
 				local function Tick()
 					if not Exp or not Exp.Parent then return end
-					Exp.Text = "Key · " .. FormatExpiry(Library.Auth.ExpiresAt)
+					Exp.Text = "Key · " .. Library.FormatExpiry(Library.Auth.ExpiresAt)
 					if Library.Auth.ExpiresAt and os.time() >= Library.Auth.ExpiresAt then
 						Library.Auth.Validated = false
 						Library.Auth.Token = nil
@@ -4448,8 +4466,8 @@ Library._MountKeySystem = function(Window)
 			end
 		end
 		if Library.Auth.WatermarkExpiry and Library.SetWatermark then
-			local Base = Library.Watermark.Text or "Lumen"
-			Library.SetWatermark(Base .. " | " .. FormatExpiry(Library.Auth.ExpiresAt), Library.Watermark.Enabled)
+			local Base = Library.Watermark.BaseText or Library.Watermark.Text or "Lumen"
+			Library.SetWatermark(Base, Library.Watermark.Enabled)
 		end
 		Library.Notify({ Title = "Key system"; Content = "Welcome back"; Type = "Success"; Duration = 2.5 })
 	end
