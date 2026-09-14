@@ -3319,7 +3319,7 @@ Library.Notify = function(propertyTable: {})
 			Parent = Gui;
 			Name = "Notifications";
 			BackgroundTransparency = 1;
-			Size = UFO(260, 0);
+			Size = UFO(240, 0);
 			AutomaticSize = AS.Y;
 			ZIndex = 200;
 		})
@@ -3436,10 +3436,10 @@ Library.Notify = function(propertyTable: {})
 	})
 	Add("UIPadding", {
 		Parent = Body;
-		PaddingLeft = UD(0, 12);
-		PaddingRight = UD(0, 10);
-		PaddingTop = UD(0, 8);
-		PaddingBottom = UD(0, 12);
+		PaddingLeft = UD(0, 10);
+		PaddingRight = UD(0, 8);
+		PaddingTop = UD(0, 6);
+		PaddingBottom = UD(0, 8);
 	})
 
 	local LeftPad = 0
@@ -3473,7 +3473,7 @@ Library.Notify = function(propertyTable: {})
 		FontFace = FN("rbxassetid://12187365364", FW.SemiBold, FS.Normal);
 		Text = Props.Title or "Notification";
 		TextColor3 = TypeColor;
-		TextSize = 14;
+		TextSize = 12;
 		TextXAlignment = TXA.Left;
 		ZIndex = 4;
 	})
@@ -3481,12 +3481,12 @@ Library.Notify = function(propertyTable: {})
 	local Close = Add("TextButton", {
 		Parent = Body;
 		AnchorPoint = V2(1, 0);
-		Position = UD2(1, 6, 0, -5);
-		Size = UFO(24, 24);
+		Position = UD2(1, 4, 0, -4);
+		Size = UFO(18, 18);
 		BackgroundTransparency = 1;
 		Text = "x";
 		TextColor3 = RGB(160, 160, 165);
-		TextSize = 18;
+		TextSize = 14;
 		FontFace = FN("rbxassetid://12187365364", FW.SemiBold, FS.Normal);
 		AutoButtonColor = false;
 		ZIndex = 5;
@@ -3502,13 +3502,13 @@ Library.Notify = function(propertyTable: {})
 		Add("TextLabel", {
 			Parent = Body;
 			BackgroundTransparency = 1;
-			Position = UFO(LeftPad, 21);
+			Position = UFO(LeftPad, 16);
 			Size = UD2(1, -LeftPad, 0, 0);
 			AutomaticSize = AS.Y;
 			FontFace = FN("rbxassetid://12187365364", FW.SemiBold, FS.Normal);
 			Text = Content;
 			TextColor3 = RGB(160, 160, 165);
-			TextSize = 13;
+			TextSize = 11;
 			TextWrapped = true;
 			TextXAlignment = TXA.Left;
 			TextYAlignment = TYA.Top;
@@ -3519,8 +3519,8 @@ Library.Notify = function(propertyTable: {})
 	local BarBG = Add("Frame", {
 		Parent = Card;
 		AnchorPoint = V2(0, 1);
-		Position = UD2(0, 16, 1, -8);
-		Size = UD2(1, -32, 0, 3);
+		Position = UD2(0, 10, 1, -5);
+		Size = UD2(1, -20, 0, 2);
 		BackgroundColor3 = T.SurfaceAlt or RGB(33, 33, 35);
 		BorderSizePixel = 0;
 		ZIndex = 5;
@@ -3536,8 +3536,8 @@ Library.Notify = function(propertyTable: {})
 
 	task.defer(function()
 		if Slot.Parent then
-			local H = math.max(Card.AbsoluteSize.Y, 40)
-			Tween(Slot, { Size = UD2(1, 0, 0, H) }, 0.3, ES.Quint)
+			local H = math.max(Card.AbsoluteSize.Y, 32)
+			Tween(Slot, { Size = UD2(1, 0, 0, H) }, 0.28, ES.Quint)
 		end
 	end)
 
@@ -4177,18 +4177,41 @@ Library._MountKeySystem = function(Window)
 	})
 	Add("UICorner", { Parent = Layer; CornerRadius = UD(0, 5); })
 	Add("UIStroke", { Parent = Layer; ApplyStrokeMode = ASM.Border; Color = T.Border or RGB(36, 37, 37); })
+	Add("UIShadow", { Parent = Layer; BlurRadius = UD(0, 20); Spread = UFO(5, 5); Transparency = 0.65; })
 	Library.ThemeLink(Layer, "BackgroundColor3", "Background")
 	BindDrag(Canvas, Layer, true)
 
-	Add("ImageLabel", {
+	local Hair = Add("Frame", {
+		Parent = Layer;
+		Size = UD2(1, 0, 0, 1);
+		BackgroundColor3 = RGB(255, 255, 255);
+		BackgroundTransparency = 0.93;
+		BorderSizePixel = 0;
+		ZIndex = 81;
+	})
+
+	local AccentGlow = Add("ImageLabel", {
 		Parent = Layer;
 		AnchorPoint = V2(0.5, 0.5);
-		Position = UFS(0.5, 0.35);
-		Size = UFO(420, 320);
+		Position = UFS(0.5, 0.42);
+		Size = UFO(480, 360);
 		BackgroundTransparency = 1;
 		Image = "rbxassetid://8992230677";
 		ImageColor3 = T.Accent;
-		ImageTransparency = 0.88;
+		ImageTransparency = 0.9;
+		ZIndex = 80;
+	})
+	Library.ThemeLink(AccentGlow, "ImageColor3", "Accent")
+
+	local SideGlow = Add("ImageLabel", {
+		Parent = Layer;
+		AnchorPoint = V2(0, 1);
+		Position = UD2(0, -20, 1, 20);
+		Size = UFO(220, 180);
+		BackgroundTransparency = 1;
+		Image = "rbxassetid://8992230677";
+		ImageColor3 = T.AccentDark or T.Accent;
+		ImageTransparency = 0.92;
 		ZIndex = 80;
 	})
 
@@ -4265,17 +4288,22 @@ Library._MountKeySystem = function(Window)
 		Parent = Form;
 		Position = UFO(0, 106);
 		Size = UD2(1, 0, 0, 42);
-		BackgroundColor3 = T.Accent;
+		BackgroundColor3 = RGB(255, 255, 255);
 		AutoButtonColor = false;
 		Text = Opts.ButtonText or "Sign in";
 		FontFace = FN("rbxassetid://12187365364", FW.SemiBold, FS.Normal);
 		TextSize = 14;
-		TextColor3 = RGB(255, 255, 255);
+		TextColor3 = RGB(0, 0, 0);
 		BorderSizePixel = 0;
 		ZIndex = 82;
 	})
-	Add("UICorner", { Parent = SignIn; CornerRadius = UD(0, 8); })
-	Library.ThemeLink(SignIn, "BackgroundColor3", "Accent")
+	Add("UICorner", { Parent = SignIn; CornerRadius = UD(0, 6); })
+	local SignGrad = Add("UIGradient", {
+		Parent = SignIn;
+		Color = CS{ CSK(0, T.AccentDark or RGB(78, 88, 129)), CSK(1, T.Accent or RGB(138, 156, 229)) };
+		Rotation = -70;
+	})
+	Library.ThemeLink(SignGrad, "Gradient", "AccentDark", "Accent")
 
 	local RememberOn = Opts.Remember ~= false
 	local RememberRow = Add("Frame", {
@@ -4287,26 +4315,31 @@ Library._MountKeySystem = function(Window)
 	})
 	local RememberBtn = Add("TextButton", {
 		Parent = RememberRow;
-		Size = UFO(16, 16);
-		BackgroundColor3 = RememberOn and T.Accent or (T.SurfaceAlt or RGB(20, 20, 21));
+		Size = UFO(18, 18);
+		BackgroundColor3 = T.Surface or RGB(15, 14, 15);
 		Text = "";
 		AutoButtonColor = false;
 		BorderSizePixel = 0;
 		ZIndex = 83;
 	})
 	Add("UICorner", { Parent = RememberBtn; CornerRadius = UD(0, 4); })
-	Add("UIStroke", { Parent = RememberBtn; Color = T.Border or RGB(36, 37, 37); Thickness = 1; })
-	local Check = Add("Frame", {
+	local RemStroke = Add("UIStroke", { Parent = RememberBtn; Color = T.Border or RGB(36, 37, 37); Thickness = 1; })
+	local Check = Add("TextLabel", {
 		Parent = RememberBtn;
-		AnchorPoint = V2(0.5, 0.5);
-		Position = UFS(0.5, 0.5);
-		Size = UFO(8, 8);
-		BackgroundColor3 = RGB(255, 255, 255);
-		BackgroundTransparency = RememberOn and 0 or 1;
-		BorderSizePixel = 0;
+		Size = UFS(1, 1);
+		BackgroundTransparency = 1;
+		Text = "✓";
+		TextColor3 = T.Accent;
+		TextSize = 13;
+		Font = Enum.Font.GothamBold;
+		TextTransparency = RememberOn and 0 or 1;
 		ZIndex = 84;
 	})
-	Add("UICorner", { Parent = Check; CornerRadius = UD(0, 2); })
+	if RememberOn then
+		RememberBtn.BackgroundColor3 = T.Accent
+		Check.TextColor3 = RGB(255, 255, 255)
+		RemStroke.Transparency = 1
+	end
 	Add("TextLabel", {
 		Parent = RememberRow;
 		Position = UFO(22, 0);
@@ -4321,13 +4354,14 @@ Library._MountKeySystem = function(Window)
 	})
 	RememberBtn.Activated:Connect(function()
 		RememberOn = not RememberOn
-		Tween(RememberBtn, { BackgroundColor3 = RememberOn and Library.Theme.Accent or Library.Theme.SurfaceAlt }, 0.12)
-		Tween(Check, { BackgroundTransparency = RememberOn and 0 or 1 }, 0.12)
+		Tween(RememberBtn, { BackgroundColor3 = RememberOn and Library.Theme.Accent or Library.Theme.Surface }, 0.12)
+		Tween(Check, { TextTransparency = RememberOn and 0 or 1; TextColor3 = RememberOn and RGB(255, 255, 255) or Library.Theme.Accent }, 0.12)
+		Tween(RemStroke, { Transparency = RememberOn and 1 or 0 }, 0.12)
 	end)
 
 	local Error = Add("TextLabel", {
 		Parent = Form;
-		Position = UFO(0, 182);
+		Position = UFO(0, 198);
 		Size = UD2(1, 0, 0, 16);
 		BackgroundTransparency = 1;
 		Text = "";
@@ -4337,22 +4371,7 @@ Library._MountKeySystem = function(Window)
 		ZIndex = 82;
 	})
 
-	local NoteY = 204
-	if type(Opts.Note) == "string" and Opts.Note ~= "" then
-		Add("TextLabel", {
-			Parent = Form;
-			Position = UFO(0, NoteY);
-			Size = UD2(1, 0, 0, 14);
-			BackgroundTransparency = 1;
-			Text = Opts.Note;
-			TextColor3 = RGB(100, 104, 115);
-			FontFace = FN("rbxassetid://12187365364", FW.SemiBold, FS.Normal);
-			TextSize = 11;
-			ZIndex = 82;
-		})
-		NoteY = NoteY + 18
-	end
-
+	local NoteY = 178
 	if type(Opts.GetKey) == "string" and Opts.GetKey ~= "" then
 		local GetBtn = Add("TextButton", {
 			Parent = Form;
@@ -4387,6 +4406,7 @@ Library._MountKeySystem = function(Window)
 	})
 	Add("UICorner", { Parent = Loading; CornerRadius = UD(0, 5); })
 	Add("UIStroke", { Parent = Loading; ApplyStrokeMode = ASM.Border; Color = T.Border or RGB(36, 37, 37); })
+	Add("UIShadow", { Parent = Loading; BlurRadius = UD(0, 20); Spread = UFO(5, 5); Transparency = 0.65; })
 	Library.ThemeLink(Loading, "BackgroundColor3", "Background")
 	local Spin = Add("ImageLabel", {
 		Parent = Loading;
