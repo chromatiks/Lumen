@@ -1,6 +1,3 @@
-
-
---@ abbreviations
 local CSK = ColorSequenceKeypoint.new
 local NSK = NumberSequenceKeypoint.new
 local BSP = Enum.BorderStrokePosition
@@ -53,8 +50,6 @@ local LC = Enum.LineJoinMode
 local SBD = Enum.ScrollingDirection
 local SBA = Enum.ScrollBarInset
 
-
---@ beginning
 local Library = {
 	Elements = {};
 	SubElements = {};
@@ -70,11 +65,8 @@ Library.__index = Library
 Library.Elements.__index = Library.Elements
 Library.SubElements.__index = Library.SubElements
 
---@ the screengui sorts siblings by ZIndex, so popups need to outrank the window frame
 local PopupZ = 20
 
-
---@ dependencies
 cloneref = cloneref or function(...) return ... end
 gethui = gethui or function(...) return cloneref(game:GetService("CoreGui")) end
 
@@ -168,7 +160,6 @@ local Keys = {
 	["MouseButton3"]      = "MB3"
 }
 
---@ functions
 local function Add(class: string, propertyTable: { [string]: any }?): Instance
 	local _Instance = Instance.new(class)
 
@@ -191,8 +182,7 @@ end
 local function Overwrite(to_overwrite, overwrite_with)
 	for i, v in pairs(overwrite_with) do
 		if v ~= to_overwrite[i] then
-		--@ only deep-merge when both sides are tables; otherwise replace
-		--@ (fixes Multi dropdown Value = {} overwriting default Value = "")
+
 		if type(v) == "table" and type(to_overwrite[i]) == "table" then
 			Overwrite(to_overwrite[i], v)
 		elseif type(v) == "table" then
@@ -206,7 +196,6 @@ local function Overwrite(to_overwrite, overwrite_with)
 	return to_overwrite
 end
 
---@ lucide name → rbxassetid (from public lucide-roblox icon packs)
 local Lucide = {
 	activity = 10709752035,
 	aperture = 10709761813,
@@ -269,7 +258,7 @@ local function ResolveIcon(Icon: number | string?): string
 	if AsString:match("^rbxasset") then
 		return AsString
 	end
-	--@ accept "lucide:eye", "Lucide:eye", or plain "eye"
+
 	local Name = AsString:lower():gsub("^lucide:", "")
 	local Id = Lucide[Name] or tonumber(AsString)
 	if Id then
@@ -288,7 +277,6 @@ local function ClampToScreen(Object: GuiObject, Position: UDim2): UDim2
 		if Size.X <= 0 then Size = V2(280, 200) end
 	end
 
-	--@ detect whether the ScreenGui ignores inset (overlay vs main menu)
 	local IgnoresInset = false
 	local Node = Object
 	while Node do
@@ -305,11 +293,11 @@ local function ClampToScreen(Object: GuiObject, Position: UDim2): UDim2
 	local MinX = Pad
 	local MinY = Pad
 	if IgnoresInset then
-		--@ full screen coords — keep below topbar and inside viewport
+
 		MinY = Inset.Y + Pad
 		UsableH = Viewport.Y
 	else
-		--@ coords already start below topbar
+
 		UsableH = Viewport.Y - Inset.Y
 	end
 
@@ -353,7 +341,7 @@ local function BindDrag(Object: GuiObject, Handle: GuiObject?, ClampScreen: bool
 		end
 		local Pos = Input.Position
 		local Objects = Client.PlayerGui:GetGuiObjectsAtPosition(Pos.X, Pos.Y)
-		--@ also check CoreGui path via absolute bounds of IgnoreUnder
+
 		local Abs = IgnoreUnder.AbsolutePosition
 		local Size = IgnoreUnder.AbsoluteSize
 		if Pos.X >= Abs.X and Pos.X <= Abs.X + Size.X and Pos.Y >= Abs.Y and Pos.Y <= Abs.Y + Size.Y then
@@ -401,7 +389,6 @@ local function BindDrag(Object: GuiObject, Handle: GuiObject?, ClampScreen: bool
 				return
 			end
 
-			--@ smooth interpolation toward the latest pointer delta
 			local Target = UD2(
 				StartPosition.X.Scale,
 				StartPosition.X.Offset + CurrentDelta.X,
@@ -426,7 +413,7 @@ local function BindDrag(Object: GuiObject, Handle: GuiObject?, ClampScreen: bool
 	UserInputService.InputEnded:Connect(function(Input)
 		if Input.UserInputType == UIT.MouseButton1 or Input.UserInputType == UIT.Touch then
 			if Dragging then
-				--@ snap to final clamped position without residual lag
+
 				ApplyPosition(UD2(
 					StartPosition.X.Scale,
 					StartPosition.X.Offset + CurrentDelta.X,
@@ -499,7 +486,6 @@ local function ReleasePopup(Element: {})
 	end
 end
 
---@ click outside / drag menu closes open popups (colorpicker, keybind, dropdown)
 UserInputService.InputBegan:Connect(function(Input, GameProcessed)
 	if not Library.OpenPopup then
 		return
@@ -520,7 +506,6 @@ UserInputService.InputBegan:Connect(function(Input, GameProcessed)
 		return Pos.X >= A.X and Pos.X <= A.X + S.X and Pos.Y >= A.Y and Pos.Y <= A.Y + S.Y
 	end
 
-	--@ find a likely root frame on the popup element
 	local Root = Popup.Frame or Popup._Frame
 	if not Root then
 		for _, Name in { "ColorpickerFrame", "Popup", "Options" } do
@@ -532,12 +517,10 @@ UserInputService.InputBegan:Connect(function(Input, GameProcessed)
 		end
 	end
 
-	--@ allow clicks on the popup itself
 	if Root and Inside(Root) then
 		return
 	end
 
-	--@ allow the opener button (color swatch / settings gear / dropdown)
 	if Popup.Button and Inside(Popup.Button) then
 		return
 	end
@@ -554,7 +537,6 @@ UserInputService.InputBegan:Connect(function(Input, GameProcessed)
 	end
 end)
 
---@ section drag state
 local SectionDrag = {
 	Active = false,
 	Section = nil :: any,
@@ -594,7 +576,6 @@ local function ListColumnSections(Column: Frame, Exclude: Frame?): { Frame }
 	return List
 end
 
---@ assign sequential LayoutOrders; placeholder occupies InsertIndex and pushes the rest down
 local function RelayoutColumn(Column: Frame, Placeholder: Frame?, InsertIndex: number, Exclude: Frame?)
 	local Sections = ListColumnSections(Column, Exclude)
 
@@ -607,7 +588,7 @@ local function RelayoutColumn(Column: Frame, Placeholder: Frame?, InsertIndex: n
 	end
 
 	for Index, SectionFrame in Sections do
-		--@ sections at/after the insert slot shift down by one visual slot
+
 		local Slot = Index - 1
 		if Slot >= InsertIndex then
 			Slot = Slot + 1
@@ -648,7 +629,7 @@ local function StopSectionDrag(Commit: boolean)
 	ClearSectionDragVisuals()
 
 	if Commit and TargetColumn then
-		--@ place into the live slot the placeholder was holding
+
 		local Sections = ListColumnSections(TargetColumn, Frame)
 		InsertIndex = MC(InsertIndex, 0, #Sections)
 
@@ -657,7 +638,6 @@ local function StopSectionDrag(Commit: boolean)
 		Frame.BackgroundTransparency = 0
 		Section.Side = TargetColumn.Name
 
-		--@ rebuild orders: sections before insert, then frame, then the rest
 		local Order = 0
 		for Index, Sibling in Sections do
 			if Index - 1 == InsertIndex then
@@ -671,7 +651,6 @@ local function StopSectionDrag(Commit: boolean)
 			Frame.LayoutOrder = Order
 		end
 
-		--@ clean the other column if we moved across
 		if SectionDrag.SourceParent and SectionDrag.SourceParent ~= TargetColumn then
 			NormalizeColumnOrders(SectionDrag.SourceParent)
 		end
@@ -705,7 +684,6 @@ local function GetColumnAtPosition(PageFrame: Frame, ScreenPos: Vector2): Frame?
 	return Right :: Frame
 end
 
---@ returns 0-based insert index among remaining sections (placeholder slot)
 local function ComputeInsertIndex(Column: Frame, ScreenY: number, Exclude: Frame?): number
 	local Candidates = ListColumnSections(Column, Exclude)
 
@@ -774,15 +752,13 @@ local function UpdateSectionDrag(MousePos: Vector2)
 	local Placeholder = EnsurePlaceholder(SectionDrag.DragHeight)
 	Placeholder.Size = UD2(1, 0, 0, SectionDrag.DragHeight)
 
-	--@ live reflow: sections below the slot slide down to open a full-height gap
 	RelayoutColumn(Column, Placeholder, InsertIndex, Frame)
 
-	--@ if we left the other column, normalize it so gaps close
 	local PageLeft = PageFrame:FindFirstChild("Left")
 	local PageRight = PageFrame:FindFirstChild("Right")
 	local Other = if Column == PageLeft then PageRight else PageLeft
 	if Other and Other ~= Column then
-		--@ remove placeholder from the other column if it was there
+
 		if SectionDrag.Placeholder and SectionDrag.Placeholder.Parent == Other then
 			SectionDrag.Placeholder.Parent = Column
 		end
@@ -813,7 +789,6 @@ local function BeginSectionDrag(Section: any, Input: InputObject)
 		Input.Position.Y - Frame.AbsolutePosition.Y
 	)
 
-	--@ pull out of the column so siblings collapse, then placeholder opens the real gap
 	Frame.Visible = false
 	Frame.Parent = Library._Instance
 
@@ -844,7 +819,6 @@ local function BeginSectionDrag(Section: any, Input: InputObject)
 
 	SectionDrag.Ghost = Ghost
 
-	--@ seed placeholder in the original slot so layout doesn't jump on first frame
 	local Placeholder = EnsurePlaceholder(SectionDrag.DragHeight)
 	local SourceSections = ListColumnSections(SectionDrag.SourceParent, Frame)
 	local StartIndex = 0
@@ -884,9 +858,6 @@ UserInputService.InputEnded:Connect(function(Input)
 	end
 end)
 
---@ section
---@ built against whichever container holds the Left and Right columns, so a page and a
---@ sub page can both hand out sections without duplicating any of this
 local function SectionBuilder(Container: Frame)
 	return function(self: Library, propertyTable: {})
 		local Section = Overwrite({
@@ -985,7 +956,6 @@ local function SectionBuilder(Container: Frame)
 		Section.PageFrame = Container
 		Section.Side = Section.Side
 
-		--@ drag sections by their header; ghost + snap placeholder handle the rest
 		local DragThreshold = 6
 
 		Header.InputBegan:Connect(function(Input)
@@ -1039,12 +1009,6 @@ local function SectionBuilder(Container: Frame)
 	end
 end
 
---@ page content
---@ shared by Window.Page and Page.SubPage. A sub page is built by this exact function, just
---@ parented to its owning page's frame instead of the window's Pages frame, and registered
---@ into that page's own registry instead of Window.Pages - mechanically it IS a page, only
---@ reachable through a different button. OnOpen/OnClose let the caller layer trigger-button
---@ styling on top without duplicating the frame, slide animation, or mutual exclusion below.
 local function PageContent(Entry: {}, Container: Frame, Registry: {}, OnOpen: (() -> ())?, OnClose: (() -> ())?)
 	local ContentFrame = Add("Frame", { Parent = Container; Name = "PageFrame"; BackgroundColor3 = RGB(255, 255, 255); BackgroundTransparency = 1; BorderColor3 = RGB(0, 0, 0); BorderSizePixel = 0; Position = UD2(0, 0, 0, 12); Size = UFS(1, 1); Visible = false; }) :: Frame
 
@@ -1071,7 +1035,7 @@ local function PageContent(Entry: {}, Container: Frame, Registry: {}, OnOpen: ((
 		end
 
 		Add("UIListLayout", { Parent = Column; Padding = UD(0, 12); SortOrder = SO.LayoutOrder; })
-		--@ padding so section UIStroke is not clipped on any edge
+
 		Add("UIPadding", {
 			Parent = Column;
 			PaddingLeft = UD(0, 2);
@@ -1097,12 +1061,10 @@ local function PageContent(Entry: {}, Container: Frame, Registry: {}, OnOpen: ((
 	Library.PageFrames = Library.PageFrames or {}
 	Library.PageFrames[ContentFrame] = Entry
 
-	--@ tracked as a flag rather than read off ContentFrame.Visible, because a page with an
-	--@ active sub page counts as open while its own frame stays hidden
 	Entry.IsOpen = false
 
 	Entry.Open = function()
-		--@ reclicking the open tab shouldn't replay the slide or restyle anything
+
 		if Entry.IsOpen then
 			return
 		end
@@ -1137,19 +1099,18 @@ local function PageContent(Entry: {}, Container: Frame, Registry: {}, OnOpen: ((
 	return Entry
 end
 
---@ elements
 Library.Elements.Label = function(self: Library, propertyTable: {})
 	local Label = Overwrite({
 		Text = "",
 	}, propertyTable or {})
 	setmetatable(Label, { __index = Library.SubElements })
-	
-	local LabelFrame = Add("Frame", { Parent = self.Content; Name = "LabelFrame";BackgroundColor3 = RGB(255, 255, 255); BackgroundTransparency = 1; BorderColor3 = RGB(0, 0, 0); BorderSizePixel = 0; Size = UD2(1, 0, 0, 14); }) :: Frame 
-	local LeftContent = Add("Frame", { Parent = LabelFrame; Name = "LeftContent"; AutomaticSize = AS.XY; BackgroundColor3 = RGB(255, 255, 255); BackgroundTransparency = 1; BorderColor3 = RGB(0, 0, 0); BorderSizePixel = 0; }) :: Frame 
-	local RightContent = Add("Frame", { Parent = LabelFrame; Name = "RightContent"; AnchorPoint = V2(1, 0); AutomaticSize = AS.XY; BackgroundColor3 = RGB(255, 255, 255); BackgroundTransparency = 1; BorderColor3 = RGB(0, 0, 0); BorderSizePixel = 0; Position = UFS(1, 0); }) :: Frame 
-	Add("TextLabel", { LayoutOrder = 99; Parent = LeftContent; Name = "Label"; AnchorPoint = V2(0, 0.5); AutomaticSize = AS.XY; BackgroundColor3 = RGB(255, 255, 255); BackgroundTransparency = 1; BorderColor3 = RGB(0, 0, 0); BorderSizePixel = 0; FontFace = FN("rbxassetid://12187365364", FW.SemiBold, FS.Normal); Position = UD2(0, 38, 0.5, 0); Size = UFO(0, 9); Text = Label.Text; TextColor3 = RGB(255, 255, 255); TextSize = 13; TextTransparency = 0.2; }) 
-	Add("UIListLayout", { Parent = LeftContent; FillDirection = FD.Horizontal; Padding = UD(0, 10); SortOrder = SO.LayoutOrder; VerticalAlignment = VFA.Center; }) 
-	Add("UIListLayout", { Parent = RightContent; FillDirection = FD.Horizontal; HorizontalAlignment = HFA.Right; Padding = UD(0, 5); SortOrder = SO.LayoutOrder; VerticalAlignment = VFA.Center; }) 
+
+	local LabelFrame = Add("Frame", { Parent = self.Content; Name = "LabelFrame";BackgroundColor3 = RGB(255, 255, 255); BackgroundTransparency = 1; BorderColor3 = RGB(0, 0, 0); BorderSizePixel = 0; Size = UD2(1, 0, 0, 14); }) :: Frame
+	local LeftContent = Add("Frame", { Parent = LabelFrame; Name = "LeftContent"; AutomaticSize = AS.XY; BackgroundColor3 = RGB(255, 255, 255); BackgroundTransparency = 1; BorderColor3 = RGB(0, 0, 0); BorderSizePixel = 0; }) :: Frame
+	local RightContent = Add("Frame", { Parent = LabelFrame; Name = "RightContent"; AnchorPoint = V2(1, 0); AutomaticSize = AS.XY; BackgroundColor3 = RGB(255, 255, 255); BackgroundTransparency = 1; BorderColor3 = RGB(0, 0, 0); BorderSizePixel = 0; Position = UFS(1, 0); }) :: Frame
+	Add("TextLabel", { LayoutOrder = 99; Parent = LeftContent; Name = "Label"; AnchorPoint = V2(0, 0.5); AutomaticSize = AS.XY; BackgroundColor3 = RGB(255, 255, 255); BackgroundTransparency = 1; BorderColor3 = RGB(0, 0, 0); BorderSizePixel = 0; FontFace = FN("rbxassetid://12187365364", FW.SemiBold, FS.Normal); Position = UD2(0, 38, 0.5, 0); Size = UFO(0, 9); Text = Label.Text; TextColor3 = RGB(255, 255, 255); TextSize = 13; TextTransparency = 0.2; })
+	Add("UIListLayout", { Parent = LeftContent; FillDirection = FD.Horizontal; Padding = UD(0, 10); SortOrder = SO.LayoutOrder; VerticalAlignment = VFA.Center; })
+	Add("UIListLayout", { Parent = RightContent; FillDirection = FD.Horizontal; HorizontalAlignment = HFA.Right; Padding = UD(0, 5); SortOrder = SO.LayoutOrder; VerticalAlignment = VFA.Center; })
 
 	Label.RightContent = RightContent
 	Label.LeftContent = LeftContent
@@ -1178,11 +1139,11 @@ Library.Elements.Slider = function(self: Library, propertyTable: {})
 	Add("TextLabel", { Parent = SliderFrame; Name = "Title"; AutomaticSize = AS.XY; BackgroundColor3 = RGB(255, 255, 255); BackgroundTransparency = 1; BorderColor3 = RGB(0, 0, 0); BorderSizePixel = 0; FontFace = FN("rbxassetid://12187365364", FW.SemiBold, FS.Normal); Size = UFO(0, 9); Text = Slider.Name; TextColor3 = RGB(255, 255, 255); TextSize = 13; TextTransparency = 0.2; })
 	local Amount = Add("TextLabel", { Parent = SliderFrame; Name = "Amount"; AnchorPoint = V2(1, 0); AutomaticSize = AS.XY; BackgroundColor3 = RGB(255, 255, 255); BackgroundTransparency = 1; BorderColor3 = RGB(0, 0, 0); BorderSizePixel = 0; FontFace = FN("rbxassetid://12187365364", FW.SemiBold, FS.Normal); Position = UFS(1, 0); Size = UFO(0, 9); Text = ""; TextColor3 = RGB(255, 255, 255); TextSize = 13; }) :: TextLabel
 	Add("UICorner", { Parent = Button; CornerRadius = UD(0, 5); })
-	Add("UIGradient", { Parent = Overlay; Color = CS{ CSK(0, RGB(78, 88, 129)), CSK(1, RGB(138, 156, 229)) }; Rotation = -90; })
+	local SliderGrad = Add("UIGradient", { Parent = Overlay; Color = CS{ CSK(0, Library.Theme.AccentDark), CSK(1, Library.Theme.Accent) }; Rotation = -90; })
+	Library.ThemeLink(SliderGrad, "Gradient", "AccentDark", "Accent")
 	Add("UICorner", { Parent = Overlay; CornerRadius = UD(0, 5); })
 	Add("UICorner", { Parent = Circle; CornerRadius = UD(1, 0); })
 
-	--@ slider state
 	Slider.Set = function(Value: number)
 		Value = MC(MR(Value / Slider.Increment) * Slider.Increment, Slider.Min, Slider.Max)
 		Slider.Value = tonumber(SF(`%.{Decimals}f`, Value))
@@ -1223,9 +1184,6 @@ Library.Elements.Dropdown = function(self: Library, propertyTable: {})
 		Callback = print,
 	}, propertyTable or {})
 
-	--@ the root is the button that swallows clicks here, rather than a child catcher like the
-	--@ other popups use. A child would be laid out by the UIListLayout below, and a scale
-	--@ sized list item feeds its own height back into the list's AutomaticSize
 	local OptionList = Add("TextButton", { Parent = Library._Instance; Name = "Options"; AutoButtonColor = false; AutomaticSize = AS.Y; BackgroundColor3 = RGB(15, 14, 15); BorderColor3 = RGB(0, 0, 0); BorderSizePixel = 0; Position = UFS(0.3761225640773773, 0.42204996943473816); Size = UFO(253, 0); Text = ""; Visible = false; ZIndex = PopupZ; }) :: TextButton
 	Add("UICorner", { Parent = OptionList; CornerRadius = UD(0, 5); })
 	Add("UIStroke", { Parent = OptionList; ApplyStrokeMode = ASM.Border; Color = RGB(36, 37, 37); })
@@ -1241,7 +1199,6 @@ Library.Elements.Dropdown = function(self: Library, propertyTable: {})
 	local Icon = Add("ImageLabel", { Parent = InputFrame; Name = "Icon"; AnchorPoint = V2(1, 0.5); BackgroundColor3 = RGB(255, 255, 255); BackgroundTransparency = 1; BorderColor3 = RGB(0, 0, 0); BorderSizePixel = 0; Image = "rbxassetid://95865107607162"; ImageTransparency = 0.2; Position = UFS(1, 0.5); ResampleMode = Enum.ResamplerMode.Pixelated; ScaleType = SCL.Fit; Size = UFO(14, 14); }) :: ImageLabel
 	local InputText = Add("TextButton", { Parent = InputFrame; Name = "Input"; BackgroundColor3 = RGB(20, 20, 21); BackgroundTransparency = 1; BorderColor3 = RGB(0, 0, 0); BorderSizePixel = 0; FontFace = FN("rbxassetid://12187365364", FW.SemiBold, FS.Normal); Size = UD2(1, -24, 1, 0); Text = ""; TextColor3 = RGB(255, 255, 255); TextSize = 13; TextTransparency = 0.2; TextTruncate = ETT.SplitWord; TextXAlignment = TXA.Left; }) :: TextButton
 
-	--@ dropdown state
 	local Buttons = {}
 
 	local function GetMultiValue(): { string }
@@ -1269,7 +1226,6 @@ Library.Elements.Dropdown = function(self: Library, propertyTable: {})
 		end
 	end
 
-	--@ a multi dropdown toggles the entry and stays open; a single one commits and closes
 	local function Choose(Option: string)
 		if not Dropdown.Multi then
 			Dropdown.Set(Option)
@@ -1334,9 +1290,6 @@ Library.Elements.Dropdown = function(self: Library, propertyTable: {})
 			local Button = Add("TextButton", { Parent = OptionList; Name = Option; AutoButtonColor = false; BackgroundColor3 = RGB(20, 20, 21); BackgroundTransparency = 1; BorderColor3 = RGB(0, 0, 0); BorderSizePixel = 0; FontFace = FN("rbxassetid://12187365364", FW.SemiBold, FS.Normal); LayoutOrder = Index; Size = UD2(1, 0, 0, 22); Text = Option; TextColor3 = RGB(255, 255, 255); TextSize = 13; TextTransparency = 0.5; TextWrapped = true; TextXAlignment = TXA.Left; }) :: TextButton
 			Add("UIPadding", { Parent = Button; PaddingLeft = UD(0, 10); PaddingRight = UD(0, 10); })
 
-			--@ UICorner doesn't clip children, so the end options have to carry the list's
-			--@ rounding themselves or their square corners spill past it. A lone option is
-			--@ both first and last, so it rounds all four.
 			local First = Index == 1
 			local Last = Index == #VisibleOptions
 
@@ -1395,7 +1348,6 @@ Library.Elements.Dropdown = function(self: Library, propertyTable: {})
 		Dropdown.Options = NewOptions
 		Build()
 
-		--@ selections that no longer exist in the list have to be dropped
 		if Dropdown.Multi then
 			local Kept = {}
 			local Current = type(Dropdown.Value) == "table" and Dropdown.Value or {}
@@ -1451,7 +1403,7 @@ Library.Elements.Dropdown = function(self: Library, propertyTable: {})
 			return
 		end
 		LastToggle = os.clock()
-		--@ explicit toggle: second click on the control closes
+
 		Dropdown.Open(not OptionList.Visible)
 	end
 
@@ -1476,7 +1428,7 @@ Library.Elements.Dropdown = function(self: Library, propertyTable: {})
 	end
 
 	if Dropdown.Multi then
-		--@ nothing is preselected, unlike a single dropdown which always holds a value
+
 		Dropdown.Set(type(Dropdown.Value) == "table" and Dropdown.Value or {})
 	else
 		Dropdown.Set(Dropdown.Value ~= "" and Dropdown.Value or Dropdown.Options[1] or "")
@@ -1508,13 +1460,10 @@ Library.Elements.Input = function(self: Library, propertyTable: {})
 		Input.Callback(Value)
 	end
 
-	--@ commits on enter or on clicking away rather than per keystroke
 	Box.FocusLost:Connect(function()
 		Input.Set(Box.Text)
 	end)
 
-	--@ the icon and the padding are part of the field you'd expect to click into, and
-	--@ InputFrame is Active so it swallows those clicks before the box ever sees them
 	InputFrame.InputBegan:Connect(function(InputObject)
 		if InputObject.UserInputType ~= UIT.MouseButton1 and InputObject.UserInputType ~= UIT.Touch then
 			return
@@ -1537,7 +1486,7 @@ Library.Elements.Button = function(self: Library, propertyTable: {})
 		Name = "Button";
 		Callback = print;
 		Height = 30;
-		Width = 1; --@ 0–1 fraction of the section row (0.5 = half, sits beside the next half)
+		Width = 1;
 	}, propertyTable or {})
 
 	local Width = typeof(Button.Width) == "number" and MC(Button.Width, 0.2, 1) or 1
@@ -1682,21 +1631,20 @@ Library.Elements.Paragraph = function(self: Library, propertyTable: {})
 	return Paragraph
 end
 
-
---@ sub elements
 Library.SubElements.Toggle = function(self: Library, propertyTable: {})
 	local Toggle = Overwrite({
 		State = false,
 		Callback = print
 	}, propertyTable or {})
-	
-	local Button = Add("TextButton", { Parent = self.LeftContent; Name = "Toggle"; AutoButtonColor = false; BackgroundColor3 = RGB(20, 20, 21); BorderColor3 = RGB(0, 0, 0); BorderSizePixel = 0; FontFace = FN("rbxasset://fonts/families/SourceSansPro.json", FW.Regular, FS.Normal); Size = UFO(28, 14); Text = ""; TextColor3 = RGB(0, 0, 0); TextSize = 14; }) :: TextButton 
-	local Indicator = Add("Frame", { Parent = Button; Name = "Indicator"; AnchorPoint = V2(1, 0.5); BackgroundColor3 = RGB(0, 0, 0); BorderColor3 = RGB(0, 0, 0); BorderSizePixel = 0; Position = UD2(1, -3, 0.5, 0); Size = UFO(10, 10); ZIndex = 2; }) :: Frame 
-	local Overlay = Add("Frame", { Parent = Button; Name = "Overlay"; BackgroundColor3 = RGB(255, 255, 255); BorderColor3 = RGB(0, 0, 0); BorderSizePixel = 0; Size = UFS(1, 1); }) :: Frame 
-	Add("UICorner", { Parent = Button; CornerRadius = UD(0, 6); }) 
-	Add("UICorner", { Parent = Indicator; CornerRadius = UD(1, 0); }) 
-	Add("UICorner", { Parent = Overlay; CornerRadius = UD(0, 6); }) 
-	Add("UIGradient", { Parent = Overlay; Color = CS{ CSK(0, RGB(78, 88, 129)), CSK(1, RGB(138, 156, 229)) }; Rotation = -90; }) 
+
+	local Button = Add("TextButton", { Parent = self.LeftContent; Name = "Toggle"; AutoButtonColor = false; BackgroundColor3 = RGB(20, 20, 21); BorderColor3 = RGB(0, 0, 0); BorderSizePixel = 0; FontFace = FN("rbxasset://fonts/families/SourceSansPro.json", FW.Regular, FS.Normal); Size = UFO(28, 14); Text = ""; TextColor3 = RGB(0, 0, 0); TextSize = 14; }) :: TextButton
+	local Indicator = Add("Frame", { Parent = Button; Name = "Indicator"; AnchorPoint = V2(1, 0.5); BackgroundColor3 = RGB(0, 0, 0); BorderColor3 = RGB(0, 0, 0); BorderSizePixel = 0; Position = UD2(1, -3, 0.5, 0); Size = UFO(10, 10); ZIndex = 2; }) :: Frame
+	local Overlay = Add("Frame", { Parent = Button; Name = "Overlay"; BackgroundColor3 = RGB(255, 255, 255); BorderColor3 = RGB(0, 0, 0); BorderSizePixel = 0; Size = UFS(1, 1); }) :: Frame
+	Add("UICorner", { Parent = Button; CornerRadius = UD(0, 6); })
+	Add("UICorner", { Parent = Indicator; CornerRadius = UD(1, 0); })
+	Add("UICorner", { Parent = Overlay; CornerRadius = UD(0, 6); })
+	local ToggleGrad = Add("UIGradient", { Parent = Overlay; Color = CS{ CSK(0, Library.Theme.AccentDark), CSK(1, Library.Theme.Accent) }; Rotation = -90; })
+	Library.ThemeLink(ToggleGrad, "Gradient", "AccentDark", "Accent")
 
 	Toggle.Set = function(state: boolean?, Silent: boolean?)
 		state = state or not Toggle.State
@@ -1750,8 +1698,7 @@ Library.SubElements.Keybind = function(self: Library, propertyTable: {})
 
 	local Popup = Add("Frame", { Parent = Library._Instance; Name = "Popup"; Active = true; BackgroundColor3 = RGB(9, 8, 8); BorderColor3 = RGB(0, 0, 0); BorderSizePixel = 0; Position = UFS(0.3753760755062103, 0.30920326709747314); Size = UFO(180, 119); Visible = false; ZIndex = PopupZ; }) :: Frame
 	Keybind.Frame = Popup
-	--@ buttons are the only thing that reliably swallows a click. Created first so it sits
-	--@ under the contents, and scale sized so it stays out of the AutomaticSize maths
+
 	Add("TextButton", { Parent = Popup; Name = "Catcher"; AutoButtonColor = false; BackgroundTransparency = 1; BorderSizePixel = 0; Size = UFS(1, 1); Text = ""; })
 	local Header = Add("Frame", { Parent = Popup; Name = "Header"; BackgroundColor3 = RGB(20, 20, 21); BorderColor3 = RGB(0, 0, 0); BorderSizePixel = 0; Size = UD2(1, 0, 0, 35); }) :: Frame
 	local Page = Add("Frame", { Parent = Popup; Name = "Page"; BackgroundColor3 = RGB(255, 255, 255); BackgroundTransparency = 1; BorderColor3 = RGB(0, 0, 0); BorderSizePixel = 0; Position = UFO(0, 35); Size = UD2(1, 0, 1, -35); }) :: Frame
@@ -1781,7 +1728,6 @@ Library.SubElements.Keybind = function(self: Library, propertyTable: {})
 	Add("UIPadding", { Parent = ToggleButton; PaddingLeft = UD(0, 14); PaddingRight = UD(0, 14); })
 	Add("UICorner", { Parent = ToggleButton; CornerRadius = UD(0, 5); })
 
-	--@ keybind state
 	local Listening = false
 
 	local function Format(Key: EnumItem?): string
@@ -1813,8 +1759,6 @@ Library.SubElements.Keybind = function(self: Library, propertyTable: {})
 		Keybind.Type = Type
 		local Held = Type == "Hold"
 
-		--@ the gradient only tints the white background, so switching it off while that
-		--@ background is still fading leaves the button bare white for the whole tween
 		local function Mode(Button: TextButton, Gradient: UIGradient, Label: TextLabel, Active: boolean)
 			if Active then
 				Gradient.Enabled = true
@@ -1825,7 +1769,7 @@ Library.SubElements.Keybind = function(self: Library, propertyTable: {})
 
 			if not Active then
 				Fade.Completed:Once(function()
-					--@ skipped if a switch back re-armed this button mid-fade
+
 					if Keybind.Type == Type then
 						Gradient.Enabled = false
 					end
@@ -1895,7 +1839,7 @@ Library.SubElements.Keybind = function(self: Library, propertyTable: {})
 
 	UserInputService.InputBegan:Connect(function(Input, GameProcessed)
 		if Listening then
-			--@ the click that armed the prompt lands here, so ignore presses on the button itself
+
 			if Input.UserInputType == UIT.MouseButton1 and KeyButton.GuiState ~= EGS.Idle then
 				return
 			end
@@ -1921,17 +1865,27 @@ Library.SubElements.Keybind = function(self: Library, propertyTable: {})
 
 		Keybind.State = Keybind.Type == "Hold" or not Keybind.State
 		local Title = Keybind.Title ~= "" and Keybind.Title or (self.Text or "Keybind")
+		Library.KeybindRegistry = Library.KeybindRegistry or {}
+		if Library.KeybindRegistry[Title] then
+			Library.KeybindRegistry[Title].Active = Keybind.State == true
+			Library.KeybindRegistry[Title].Mode = Keybind.Type or "Toggle"
+		end
 		Library.UpdateKeybindList(Title, Format(Keybind.Key), Keybind.State, Keybind.Type)
 		Keybind.Callback(Keybind.State)
 	end)
 
-	--@ deliberately ignores GameProcessed, otherwise a hold can get stuck on
 	UserInputService.InputEnded:Connect(function(Input)
 		if Keybind.Type ~= "Hold" or not Keybind.State or not Matches(Input) then
 			return
 		end
 
 		Keybind.State = false
+		local Title = Keybind.Title ~= "" and Keybind.Title or (self.Text or "Keybind")
+		Library.KeybindRegistry = Library.KeybindRegistry or {}
+		if Library.KeybindRegistry[Title] then
+			Library.KeybindRegistry[Title].Active = false
+		end
+		Library.UpdateKeybindList(Title, Format(Keybind.Key), false, Keybind.Type)
 		Keybind.Callback(false)
 	end)
 
@@ -1944,7 +1898,7 @@ Library.SubElements.Keybind = function(self: Library, propertyTable: {})
 
 	Keybind.SetType(Keybind.Type)
 	Keybind.Set(Keybind.Key)
-	--@ force list row even if list was recreated after
+
 	task.defer(function()
 		local Title = Keybind.Title ~= "" and Keybind.Title or (self.Text or "Keybind")
 		Library.UpdateKeybindList(Title, Format(Keybind.Key), false, Keybind.Type)
@@ -1970,13 +1924,10 @@ Library.SubElements.Colorpicker = function(self: Library, propertyTable: {})
 
 	local ColorpickerFrame = Add("Frame", { Parent = Library._Instance; Name = "ColorpickerFrame"; Active = true; AutomaticSize = AS.Y; BackgroundColor3 = RGB(9, 8, 8); BorderColor3 = RGB(0, 0, 0); BorderSizePixel = 0; Position = UFS(0.3759043514728546, 0.058557264506816864); Size = UFO(199, 0); Visible = false; ZIndex = PopupZ; }) :: Frame
 	Colorpicker.Frame = ColorpickerFrame
-	--@ buttons are the only thing that reliably swallows a click. Created first so it sits
-	--@ under the contents, and scale sized so it stays out of the AutomaticSize maths
+
 	Add("TextButton", { Parent = ColorpickerFrame; Name = "Catcher"; AutoButtonColor = false; BackgroundTransparency = 1; BorderSizePixel = 0; Size = UFS(1, 1); Text = ""; })
 	local Header = Add("Frame", { Parent = ColorpickerFrame; Name = "Header"; BackgroundColor3 = RGB(20, 20, 21); BorderColor3 = RGB(0, 0, 0); BorderSizePixel = 0; Size = UD2(1, 0, 0, 35); }) :: Frame
-	--@ its height has to come from its own contents. A scale height would be ignored by the
-	--@ frame's AutomaticSize, leaving the frame only as tall as the header while everything
-	--@ below it rendered outside the frame and took no input
+
 	local Page = Add("Frame", { Parent = ColorpickerFrame; Name = "Page"; AutomaticSize = AS.Y; BackgroundColor3 = RGB(255, 255, 255); BackgroundTransparency = 1; BorderColor3 = RGB(0, 0, 0); BorderSizePixel = 0; Position = UFO(0, 35); Size = UD2(1, 0, 0, 0); }) :: Frame
 	local SaturationBox = Add("Frame", { Parent = Page; Name = "SaturationBox"; BackgroundColor3 = RGB(255, 255, 255); BorderColor3 = RGB(0, 0, 0); BorderSizePixel = 0; Size = UD2(1, 0, 0, 175); }) :: Frame
 	local ValueOverlay = Add("Frame", { Parent = SaturationBox; Name = "ValueOverlay"; BackgroundColor3 = RGB(255, 255, 255); BorderColor3 = RGB(0, 0, 0); BorderSizePixel = 0; Size = UFS(1, 1); }) :: Frame
@@ -2013,7 +1964,6 @@ Library.SubElements.Colorpicker = function(self: Library, propertyTable: {})
 	Add("UIShadow", { Parent = AlphaCursor; BlurRadius = UD(0, 5); Spread = UFO(5, 5); Transparency = 0.48; })
 	local AlphaGradient = Add("UIGradient", { Parent = AlphaSlider; Color = CS{ CSK(0, RGB(255, 255, 255)), CSK(1, RGB(255, 0, 0)) }; }) :: UIGradient
 
-	--@ colorpicker state
 	local function Update()
 		Colorpicker.Color = HSV(Hue, Saturation, Value)
 
@@ -2102,11 +2052,7 @@ Library.SubElements.Colorpicker = function(self: Library, propertyTable: {})
 	return Colorpicker
 end
 
-
---@ window
 Library._Instance = Add("ScreenGui", { Parent = RunService:IsStudio() and Client.PlayerGui or Services:GetService("CoreGui"); Name = "Window"; ZIndexBehavior = ZIB.Sibling; }) :: ScreenGui
-
- 
 
 Library.Window = function(self: Library, propertyTable: {})
 	local Window = Overwrite({
@@ -2114,36 +2060,36 @@ Library.Window = function(self: Library, propertyTable: {})
 		Footer = "",
 	}, propertyTable or {})
 
-	local Canvas = Add("Frame", { Parent = self._Instance; Name = "Canvas"; BackgroundColor3 = RGB(9, 8, 8); BorderColor3 = RGB(0, 0, 0); BorderSizePixel = 0; Size = UFO(658, 461); }) :: Frame 
-	local Sidebar = Add("Frame", { Parent = Canvas; Name = "Sidebar"; BackgroundColor3 = RGB(15, 14, 15); BorderColor3 = RGB(0, 0, 0); BorderSizePixel = 0; Size = UD2(0, 75, 1, 0); }) :: Frame 
-	local PageButtons = Add("Frame", { Parent = Sidebar; Name = "PageButtons"; BackgroundColor3 = RGB(255, 255, 255); BackgroundTransparency = 1; BorderColor3 = RGB(0, 0, 0); BorderSizePixel = 0; Size = UFS(1, 1); }) :: Frame 
-	local Header = Add("Frame", { Parent = Canvas; Name = "Header"; BackgroundColor3 = RGB(20, 20, 21); BorderColor3 = RGB(0, 0, 0); BorderSizePixel = 0; Position = UFO(76, 0); Size = UD2(1, -76, 0, 50); }) :: Frame 
-	local SubPages = Add("Frame", { Parent = Header; Name = "SubPages"; AutomaticSize = AS.X; BackgroundColor3 = RGB(255, 255, 255); BackgroundTransparency = 1; BorderColor3 = RGB(0, 0, 0); BorderSizePixel = 0; Size = UFS(0, 1); }) :: Frame 
-	local Search = Add("Frame", { Parent = Header; Name = "Search"; LayoutOrder = 1; Active = true; AnchorPoint = V2(1, 0); AutomaticSize = AS.X; BackgroundColor3 = RGB(9, 8, 8); BorderColor3 = RGB(0, 0, 0); BorderSizePixel = 0; Position = UFS(1, 0); Selectable = true; Size = UD2(0, 200, 1, 0); }) :: Frame 
-	local Pages = Add("Frame", { Parent = Canvas; Name = "Pages"; BackgroundColor3 = RGB(255, 255, 255); BackgroundTransparency = 1; BorderColor3 = RGB(0, 0, 0); BorderSizePixel = 0; Position = UFO(75, 50); Size = UD2(1, -75, 1, -75); }) :: Frame 
-	local Footer = Add("Frame", { Parent = Canvas; Name = "Footer"; AnchorPoint = V2(0, 1); BackgroundColor3 = RGB(15, 14, 15); BorderColor3 = RGB(0, 0, 0); BorderSizePixel = 0; Position = UD2(0, 76, 1, 0); Size = UD2(1, -76, 0, 25); }) :: Frame 
+	local Canvas = Add("Frame", { Parent = self._Instance; Name = "Canvas"; BackgroundColor3 = RGB(9, 8, 8); BorderColor3 = RGB(0, 0, 0); BorderSizePixel = 0; Size = UFO(658, 461); }) :: Frame
+	local Sidebar = Add("Frame", { Parent = Canvas; Name = "Sidebar"; BackgroundColor3 = RGB(15, 14, 15); BorderColor3 = RGB(0, 0, 0); BorderSizePixel = 0; Size = UD2(0, 75, 1, 0); }) :: Frame
+	local PageButtons = Add("Frame", { Parent = Sidebar; Name = "PageButtons"; BackgroundColor3 = RGB(255, 255, 255); BackgroundTransparency = 1; BorderColor3 = RGB(0, 0, 0); BorderSizePixel = 0; Size = UFS(1, 1); }) :: Frame
+	local Header = Add("Frame", { Parent = Canvas; Name = "Header"; BackgroundColor3 = RGB(20, 20, 21); BorderColor3 = RGB(0, 0, 0); BorderSizePixel = 0; Position = UFO(76, 0); Size = UD2(1, -76, 0, 50); }) :: Frame
+	local SubPages = Add("Frame", { Parent = Header; Name = "SubPages"; AutomaticSize = AS.X; BackgroundColor3 = RGB(255, 255, 255); BackgroundTransparency = 1; BorderColor3 = RGB(0, 0, 0); BorderSizePixel = 0; Size = UFS(0, 1); }) :: Frame
+	local Search = Add("Frame", { Parent = Header; Name = "Search"; LayoutOrder = 1; Active = true; AnchorPoint = V2(1, 0); AutomaticSize = AS.X; BackgroundColor3 = RGB(9, 8, 8); BorderColor3 = RGB(0, 0, 0); BorderSizePixel = 0; Position = UFS(1, 0); Selectable = true; Size = UD2(0, 200, 1, 0); }) :: Frame
+	local Pages = Add("Frame", { Parent = Canvas; Name = "Pages"; BackgroundColor3 = RGB(255, 255, 255); BackgroundTransparency = 1; BorderColor3 = RGB(0, 0, 0); BorderSizePixel = 0; Position = UFO(75, 50); Size = UD2(1, -75, 1, -75); }) :: Frame
+	local Footer = Add("Frame", { Parent = Canvas; Name = "Footer"; AnchorPoint = V2(0, 1); BackgroundColor3 = RGB(15, 14, 15); BorderColor3 = RGB(0, 0, 0); BorderSizePixel = 0; Position = UD2(0, 76, 1, 0); Size = UD2(1, -76, 0, 25); }) :: Frame
 	local SearchBox = Add("TextBox", { Parent = Search; Name = "TextLabel"; Active = false; AutomaticSize = AS.X; ClearTextOnFocus = false; LayoutOrder = 1; BackgroundColor3 = RGB(255, 255, 255); BackgroundTransparency = 1; BorderColor3 = RGB(0, 0, 0); BorderSizePixel = 0; FontFace = FN("rbxassetid://12187365364", FW.SemiBold, FS.Normal); PlaceholderColor3 = RGB(255, 255, 255); PlaceholderText = "Search function"; Selectable = false; Size = UFS(0, 1); Text = ""; TextColor3 = RGB(255, 255, 255); TextSize = 14; TextTransparency = 0.5; }) :: TextBox
-	Add("UIStroke", { Parent = Canvas; ApplyStrokeMode = ASM.Border; Color = RGB(36, 37, 37); }) 
-	Add("UICorner", { Parent = Canvas; CornerRadius = UD(0, 5); }) 
-	Add("UICorner", { Parent = Sidebar; BottomLeftRadius = UD(0, 5); BottomRightRadius = UD(0, 0); TopLeftRadius = UD(0, 5); TopRightRadius = UD(0, 0); }) 
-	Add("UIStroke", { Parent = Sidebar; ApplyStrokeMode = ASM.Border; Color = RGB(36, 37, 37); }) 
-	Add("UIListLayout", { Parent = PageButtons; HorizontalAlignment = HFA.Center; Padding = UD(0, 5); SortOrder = SO.LayoutOrder; VerticalAlignment = VFA.Center; }) 
-	Add("UICorner", { Parent = Header; BottomLeftRadius = UD(0, 0); BottomRightRadius = UD(0, 0); TopLeftRadius = UD(0, 0); TopRightRadius = UD(0, 5); }) 
-	Add("UIStroke", { Parent = Header; ApplyStrokeMode = ASM.Border; Color = RGB(36, 37, 37); }) 
-	Add("UIListLayout", { Parent = SubPages; FillDirection = FD.Horizontal; Padding = UD(0, 10); SortOrder = SO.LayoutOrder; VerticalAlignment = VFA.Center; }) 
-	Add("UIPadding", { Parent = Header; PaddingBottom = UD(0, 10); PaddingLeft = UD(0, 10); PaddingRight = UD(0, 10); PaddingTop = UD(0, 10); }) 
-	Add("UIPadding", { Parent = Search; PaddingLeft = UD(0, 8); PaddingRight = UD(0, 8); }) 
-	Add("UICorner", { Parent = Search; CornerRadius = UD(0, 5); }) 
-	Add("UIListLayout", { Parent = Search; FillDirection = FD.Horizontal; Padding = UD(0, 5); SortOrder = SO.LayoutOrder; VerticalAlignment = VFA.Center; }) 
-	Add("ImageLabel", { Parent = Search; BackgroundColor3 = RGB(255, 255, 255); BackgroundTransparency = 1; LayoutOrder = 0; BorderColor3 = RGB(0, 0, 0); BorderSizePixel = 0; Image = "rbxassetid://82536262318754"; ImageTransparency = 0.5; ResampleMode = Enum.ResamplerMode.Pixelated; Size = UFO(15, 15); }) 
-	Add("UIListLayout", { Parent = Header; FillDirection = FD.Horizontal; HorizontalFlex = UFA.SpaceBetween; SortOrder = SO.LayoutOrder; VerticalAlignment = VFA.Center; }) 
-	Add("UIPadding", { Parent = Pages; PaddingBottom = UD(0, 12); PaddingLeft = UD(0, 12); PaddingRight = UD(0, 12); PaddingTop = UD(0, 12); }) 
-	Add("UIShadow", { Parent = Canvas; BlurRadius = UD(0, 20); Spread = UFO(5, 5); Transparency = 0.65; }) 
-	Add("UICorner", { Parent = Footer; BottomLeftRadius = UD(0, 0); BottomRightRadius = UD(0, 5); TopLeftRadius = UD(0, 0); TopRightRadius = UD(0, 0); }) 
-	Add("UIStroke", { Parent = Footer; ApplyStrokeMode = ASM.Border; Color = RGB(36, 37, 37); }) 
-	Add("UIPadding", { Parent = Footer; PaddingBottom = UD(0, 10); PaddingLeft = UD(0, 10); PaddingRight = UD(0, 10); PaddingTop = UD(0, 10); }) 
-	Add("TextLabel", { Parent = Footer; AnchorPoint = V2(0, 0.5); AutomaticSize = AS.X; BackgroundColor3 = RGB(255, 255, 255); BackgroundTransparency = 1; BorderColor3 = RGB(0, 0, 0); BorderSizePixel = 0; FontFace = FN("rbxassetid://12187365364", FW.SemiBold, FS.Normal); Position = UFS(0, 0.5); Size = UFO(0, 13); Text = Window.Title; TextColor3 = RGB(255, 255, 255); TextSize = 13; TextTransparency = 0.5; }) 
-	Add("TextLabel", { Parent = Footer; AnchorPoint = V2(1, 0.5); AutomaticSize = AS.X; BackgroundColor3 = RGB(255, 255, 255); BackgroundTransparency = 1; BorderColor3 = RGB(0, 0, 0); BorderSizePixel = 0; FontFace = FN("rbxassetid://12187365364", FW.SemiBold, FS.Normal); Position = UFS(1, 0.5); Size = UFO(0, 13); Text = Window.Footer; TextColor3 = RGB(255, 255, 255); TextSize = 13; TextTransparency = 0.5; }) 
+	Add("UIStroke", { Parent = Canvas; ApplyStrokeMode = ASM.Border; Color = RGB(36, 37, 37); })
+	Add("UICorner", { Parent = Canvas; CornerRadius = UD(0, 5); })
+	Add("UICorner", { Parent = Sidebar; BottomLeftRadius = UD(0, 5); BottomRightRadius = UD(0, 0); TopLeftRadius = UD(0, 5); TopRightRadius = UD(0, 0); })
+	Add("UIStroke", { Parent = Sidebar; ApplyStrokeMode = ASM.Border; Color = RGB(36, 37, 37); })
+	Add("UIListLayout", { Parent = PageButtons; HorizontalAlignment = HFA.Center; Padding = UD(0, 5); SortOrder = SO.LayoutOrder; VerticalAlignment = VFA.Center; })
+	Add("UICorner", { Parent = Header; BottomLeftRadius = UD(0, 0); BottomRightRadius = UD(0, 0); TopLeftRadius = UD(0, 0); TopRightRadius = UD(0, 5); })
+	Add("UIStroke", { Parent = Header; ApplyStrokeMode = ASM.Border; Color = RGB(36, 37, 37); })
+	Add("UIListLayout", { Parent = SubPages; FillDirection = FD.Horizontal; Padding = UD(0, 10); SortOrder = SO.LayoutOrder; VerticalAlignment = VFA.Center; })
+	Add("UIPadding", { Parent = Header; PaddingBottom = UD(0, 10); PaddingLeft = UD(0, 10); PaddingRight = UD(0, 10); PaddingTop = UD(0, 10); })
+	Add("UIPadding", { Parent = Search; PaddingLeft = UD(0, 8); PaddingRight = UD(0, 8); })
+	Add("UICorner", { Parent = Search; CornerRadius = UD(0, 5); })
+	Add("UIListLayout", { Parent = Search; FillDirection = FD.Horizontal; Padding = UD(0, 5); SortOrder = SO.LayoutOrder; VerticalAlignment = VFA.Center; })
+	Add("ImageLabel", { Parent = Search; BackgroundColor3 = RGB(255, 255, 255); BackgroundTransparency = 1; LayoutOrder = 0; BorderColor3 = RGB(0, 0, 0); BorderSizePixel = 0; Image = "rbxassetid://82536262318754"; ImageTransparency = 0.5; ResampleMode = Enum.ResamplerMode.Pixelated; Size = UFO(15, 15); })
+	Add("UIListLayout", { Parent = Header; FillDirection = FD.Horizontal; HorizontalFlex = UFA.SpaceBetween; SortOrder = SO.LayoutOrder; VerticalAlignment = VFA.Center; })
+	Add("UIPadding", { Parent = Pages; PaddingBottom = UD(0, 12); PaddingLeft = UD(0, 12); PaddingRight = UD(0, 12); PaddingTop = UD(0, 12); })
+	Add("UIShadow", { Parent = Canvas; BlurRadius = UD(0, 20); Spread = UFO(5, 5); Transparency = 0.65; })
+	Add("UICorner", { Parent = Footer; BottomLeftRadius = UD(0, 0); BottomRightRadius = UD(0, 5); TopLeftRadius = UD(0, 0); TopRightRadius = UD(0, 0); })
+	Add("UIStroke", { Parent = Footer; ApplyStrokeMode = ASM.Border; Color = RGB(36, 37, 37); })
+	Add("UIPadding", { Parent = Footer; PaddingBottom = UD(0, 10); PaddingLeft = UD(0, 10); PaddingRight = UD(0, 10); PaddingTop = UD(0, 10); })
+	Add("TextLabel", { Parent = Footer; AnchorPoint = V2(0, 0.5); AutomaticSize = AS.X; BackgroundColor3 = RGB(255, 255, 255); BackgroundTransparency = 1; BorderColor3 = RGB(0, 0, 0); BorderSizePixel = 0; FontFace = FN("rbxassetid://12187365364", FW.SemiBold, FS.Normal); Position = UFS(0, 0.5); Size = UFO(0, 13); Text = Window.Title; TextColor3 = RGB(255, 255, 255); TextSize = 13; TextTransparency = 0.5; })
+	Add("TextLabel", { Parent = Footer; AnchorPoint = V2(1, 0.5); AutomaticSize = AS.X; BackgroundColor3 = RGB(255, 255, 255); BackgroundTransparency = 1; BorderColor3 = RGB(0, 0, 0); BorderSizePixel = 0; FontFace = FN("rbxassetid://12187365364", FW.SemiBold, FS.Normal); Position = UFS(1, 0.5); Size = UFO(0, 13); Text = Window.Footer; TextColor3 = RGB(255, 255, 255); TextSize = 13; TextTransparency = 0.5; })
 	BindDrag(Canvas, Header, true, Search)
 
 	Window.Canvas = Canvas
@@ -2152,7 +2098,6 @@ Library.Window = function(self: Library, propertyTable: {})
 	Library.SetWatermark(Library.Watermark.Text, Library.Watermark.Enabled)
 	Library.SetKeybindList(Library.KeybindList.Enabled)
 
-	--@ center window on first open
 	task.defer(function()
 		local Camera = workspace.CurrentCamera
 		if not Camera then
@@ -2171,7 +2116,6 @@ Library.Window = function(self: Library, propertyTable: {})
 		))
 	end)
 
-	--@ stay fully on-screen if the viewport resizes
 	do
 		local Cam = workspace.CurrentCamera
 		if Cam then
@@ -2183,14 +2127,12 @@ Library.Window = function(self: Library, propertyTable: {})
 		end
 	end
 
-	--@ the icon and the padding around the box are part of the bar you'd expect to click
 	Search.InputBegan:Connect(function(Input)
 		if Input.UserInputType == UIT.MouseButton1 or Input.UserInputType == UIT.Touch then
 			SearchBox:CaptureFocus()
 		end
 	end)
 
-	--@ search across every tab; jump to the page/subpage that owns the first match
 	SearchBox:GetPropertyChangedSignal("Text"):Connect(function()
 		local Query = SearchBox.Text:lower()
 		local Matched = {}
@@ -2227,7 +2169,6 @@ Library.Window = function(self: Library, propertyTable: {})
 		end
 	end)
 
-	--@ tab
 	Window.Pages = {}
 	Window.Page = function(self: Library, propertyTable: {})
 		local Page = Overwrite({
@@ -2240,14 +2181,12 @@ Library.Window = function(self: Library, propertyTable: {})
 
 		local PageButton = Add("TextButton", { Parent = PageButtons; Name = "PageButton"; AutoButtonColor = false; BackgroundColor3 = RGB(255, 255, 255); BackgroundTransparency = 1; BorderColor3 = RGB(0, 0, 0); BorderSizePixel = 0; FontFace = FN("rbxasset://fonts/families/SourceSansPro.json", FW.Regular, FS.Normal); Size = UFO(45, 45); Text = ""; TextColor3 = RGB(0, 0, 0); TextSize = 14; }) :: TextButton
 		Add("UICorner", { Parent = PageButton; CornerRadius = UD(1, 0); })
-		Add("UIGradient", { Parent = PageButton; Color = CS{ CSK(0, RGB(81, 91, 129)), CSK(1, RGB(127, 142, 202)) }; Rotation = -70; })
+		local PageGrad = Add("UIGradient", { Parent = PageButton; Color = CS{ CSK(0, Library.Theme.AccentDark), CSK(1, Library.Theme.Accent) }; Rotation = -70; })
+		Library.ThemeLink(PageGrad, "Gradient", "AccentDark", "Accent")
+		Page.Gradient = PageGrad
 		local PageIcon = Add("ImageLabel", { Parent = PageButton; BackgroundColor3 = RGB(255, 255, 255); BackgroundTransparency = 1; BorderColor3 = RGB(0, 0, 0); BorderSizePixel = 0; Image = ResolveIcon(Page.Icon); ImageTransparency = 0.5; ScaleType = SCL.Fit; Size = UFS(1, 1); }) :: ImageLabel
 		Add("UIPadding", { Parent = PageButton; PaddingBottom = UD(0, 12); PaddingLeft = UD(0, 12); PaddingRight = UD(0, 12); PaddingTop = UD(0, 12); })
 
-		--@ a page's own trigger styling, layered on top of the shared frame/slide/Section
-		--@ logic. Also toggles its sub page buttons - those only make sense to click while
-		--@ this page is the one open. A page that has sub pages never shows its own frame;
-		--@ it hands the content area to whichever sub page was last active
 		PageContent(Page, Pages, Window.Pages, function()
 			Page.Opened = true
 			Tween(PageButton, { BackgroundTransparency = 0 })
@@ -2270,25 +2209,16 @@ Library.Window = function(self: Library, propertyTable: {})
 				SubPage.Button.Visible = false
 			end
 
-			--@ the sub page frame is a sibling of the page frames, so it has to be hidden
-			--@ here or it would linger over the next page. Which one was active is kept, so
-			--@ reopening the page restores it
 			if Page.ActiveSubPage then
 				Page.ActiveSubPage.Close()
 			end
 		end)
 
-		--@ sub page
-		--@ a sub page IS a page: built by the same PageContent, parented to the window's
-		--@ content area as a sibling of every page frame, just registered into
-		--@ Page.SubPages instead of Window.Pages and reached through this pill button in
-		--@ the header row instead of the sidebar
 		Page.SubPage = function(self: Library, propertyTable: {})
 			local SubPage = Overwrite({
 				Name = "",
 			}, propertyTable or {})
 
-			--@ shared header row, so this only shows while its own page is open
 			local SubPageButton = Add("TextButton", { Parent = SubPages; Name = "SubPageButton"; AutoButtonColor = false; AutomaticSize = AS.X; BackgroundColor3 = Library.Theme.Background; BorderColor3 = RGB(0, 0, 0); BorderSizePixel = 0; FontFace = FN("rbxasset://fonts/families/SourceSansPro.json", FW.Regular, FS.Normal); Size = UFS(0, 1); Text = ""; TextColor3 = RGB(0, 0, 0); TextSize = 14; Visible = Page.Opened; }) :: TextButton
 			local SubGrad = Add("UIGradient", { Parent = SubPageButton; Color = CS{ CSK(0, Library.Theme.AccentDark), CSK(1, Library.Theme.Accent) }; Rotation = -70; })
 			Library.ThemeLink(SubGrad, "Gradient", "AccentDark", "Accent")
@@ -2300,7 +2230,7 @@ Library.Window = function(self: Library, propertyTable: {})
 
 			SubPage.ParentPage = Page
 			PageContent(SubPage, Pages, Page.SubPages, function()
-				--@ opening a sub page takes over the content area from the page itself
+
 				Page.ActiveSubPage = SubPage
 				Page.Frame.Visible = false
 
@@ -2313,9 +2243,6 @@ Library.Window = function(self: Library, propertyTable: {})
 
 			SubPageButton.Activated:Connect(SubPage.Open)
 
-			--@ the first sub page becomes the page's content, but only shows right away if
-			--@ its page is the one currently open - its frame lives beside every page frame
-			--@ now, so opening it blind would draw it over whatever page is on screen
 			if #Page.SubPages == 1 then
 				Page.ActiveSubPage = SubPage
 
@@ -2343,8 +2270,6 @@ Library.Window = function(self: Library, propertyTable: {})
 	return Window
 end
 
-
---@ ending - theme / config / menu / loading
 Library.Theme = {
 	Accent = RGB(138, 156, 229),
 	AccentDark = RGB(78, 88, 129),
@@ -2357,7 +2282,18 @@ Library.Theme = {
 	TextDim = RGB(180, 184, 200),
 }
 
-Library.ThemeLinks = {} --@ { Object, Property, Key } or { Object, "Gradient", Key, Key2 }
+Library.DefaultTheme = {
+	Accent = RGB(138, 156, 229),
+	AccentDark = RGB(78, 88, 129),
+	Background = RGB(9, 8, 8),
+	Surface = RGB(15, 14, 15),
+	SurfaceAlt = RGB(20, 20, 21),
+	Border = RGB(36, 37, 37),
+	SectionBorder = RGB(32, 33, 36),
+	Text = RGB(255, 255, 255),
+}
+
+Library.ThemeLinks = {}
 
 Library.ThemeLink = function(Object: Instance, Property: string, Key: string, Key2: string?)
 	if not Object then
@@ -2368,7 +2304,7 @@ end
 
 Library.ApplyTheme = function()
 	local T = Library.Theme
-	--@ ensure accent dark tracks accent if not set
+
 	if T.Accent then
 		local H, S, V = T.Accent:ToHSV()
 		if not T.AccentDark then
@@ -2399,7 +2335,6 @@ Library.ApplyTheme = function()
 		end
 	end
 
-	--@ window chrome + tabs
 	for _, Win in Library.Windows do
 		local Canvas = Win.Canvas
 		if Canvas then
@@ -2433,7 +2368,7 @@ Library.ApplyTheme = function()
 		for _, Page in (Win.Pages or {}) do
 			if Page.Gradient then PaintGrad(Page.Gradient) end
 			if Page.Button then
-				--@ selected tabs keep white fill under accent gradient
+
 				if Page.Opened then
 					Page.Button.BackgroundTransparency = 0
 					if Page.IconLabel then
@@ -2456,7 +2391,6 @@ Library.ApplyTheme = function()
 		end
 	end
 
-	--@ sections
 	for _, Section in Library.Sections do
 		if Section.Frame then
 			Section.Frame.BackgroundColor3 = T.Surface
@@ -2476,7 +2410,6 @@ Library.ApplyTheme = function()
 		end
 	end
 
-	--@ overlays
 	if Library.Watermark.Frame then
 		Library.Watermark.Frame.BackgroundColor3 = T.Surface
 		local Stroke = Library.Watermark.Frame:FindFirstChildOfClass("UIStroke")
@@ -2572,6 +2505,13 @@ Library.GetConfig = function()
 		end
 	end
 
+	if Library.KeybindList and Library.KeybindList.Frame then
+		local P = Library.KeybindList.Frame.Position
+		Data.KeybindListPos = { X = P.X.Offset; Y = P.Y.Offset }
+	elseif Library.KeybindList and Library.KeybindList.SavedPos then
+		Data.KeybindListPos = Library.KeybindList.SavedPos
+	end
+
 	return Data
 end
 
@@ -2584,7 +2524,7 @@ Library.SetFlag = function(Flag: string, Value: any, Transparency: number?)
 		if Transparency ~= nil then
 			Entry.Set(Value, Transparency)
 		elseif type(Value) == "boolean" then
-			--@ toggles: second arg Silent suppresses notifications while loading
+
 			Entry.Set(Value, true)
 		else
 			Entry.Set(Value)
@@ -2605,6 +2545,18 @@ Library.LoadConfigData = function(Data: {})
 			if Color then
 				Library.Theme[Key] = Color
 			end
+		end
+	end
+
+	if type(Data.KeybindListPos) == "table" then
+		Library.KeybindList = Library.KeybindList or {}
+		Library.KeybindList.SavedPos = {
+			X = tonumber(Data.KeybindListPos.X) or 18;
+			Y = tonumber(Data.KeybindListPos.Y) or 200;
+		}
+		if Library.KeybindList.Frame then
+			local Pos = UFO(Library.KeybindList.SavedPos.X, Library.KeybindList.SavedPos.Y)
+			Library.KeybindList.Frame.Position = ClampToScreen(Library.KeybindList.Frame, Pos)
 		end
 	end
 
@@ -2760,7 +2712,6 @@ Library.RegisterFlag = function(Flag: string, Entry: {})
 	Library.Flags[Flag] = Entry
 end
 
---@ loading screen matching Lumen theme
 Library.LoadingScreen = function(self: Library, propertyTable: {})
 	local Props = Overwrite({
 		Title = "Lumen";
@@ -2847,7 +2798,6 @@ Library.LoadingScreen = function(self: Library, propertyTable: {})
 		Done:Fire()
 	end)
 
-	--@ yield until finished so the menu is only built after
 	Done.Event:Wait()
 	Done:Destroy()
 	return Gui
@@ -2856,7 +2806,7 @@ end
 Library.UIScale = 1
 
 Library.SetScale = function(Scale: number)
-	Scale = MC(Scale / (Scale > 2 and 100 or 1), 0.75, 1.25) --@ allow 75–125 or 0.75–1.25
+	Scale = MC(Scale / (Scale > 2 and 100 or 1), 0.75, 1.25)
 	Library.UIScale = Scale
 	for _, Win in Library.Windows do
 		if Win.Canvas then
@@ -2864,7 +2814,7 @@ Library.SetScale = function(Scale: number)
 			if not Existing then
 				Existing = Add("UIScale", { Parent = Win.Canvas })
 			end
-			--@ keep visual center stable while scaling
+
 			local Abs = Win.Canvas.AbsolutePosition
 			local Size = Win.Canvas.AbsoluteSize
 			local Center = Abs + Size * 0.5
@@ -2904,7 +2854,7 @@ local function EnsureOverlayGui()
 	return Library._Overlay
 end
 
-Library.NotifyPosition = "Top Right" -- Top Left, Top Right, Bottom Left, Bottom Right
+Library.NotifyPosition = "Top Right"
 Library.Notifications = {}
 
 Library.SetWatermark = function(Text: string?, Enabled: boolean?)
@@ -2973,13 +2923,12 @@ Library.SetWatermark = function(Text: string?, Enabled: boolean?)
 		})
 	end
 
-	--@ plain ASCII separator only (no unicode diamonds / middle dots)
 	local function Sep(Order: number)
 		return Chip("-", Order, true)
 	end
 
 	local CleanText = tostring(Library.Watermark.Text or "Lumen")
-	--@ keep letters, numbers, spaces, dashes only
+
 	local Built = {}
 	for i = 1, #CleanText do
 		local c = CleanText:sub(i, i)
@@ -2996,7 +2945,7 @@ Library.SetWatermark = function(Text: string?, Enabled: boolean?)
 	if CleanText == "" then
 		CleanText = "Lumen"
 	end
-	--@ if the whole title is only digits, ignore it
+
 	if CleanText:match("^%d+$") then
 		CleanText = "Lumen"
 	end
@@ -3167,10 +3116,16 @@ Library.SetKeybindList = function(Enabled: boolean?)
 	})
 	Add("UIListLayout", { Parent = Rows; SortOrder = SO.LayoutOrder; Padding = UD(0, 2); })
 
-	--@ drag by header
 	BindDrag(Panel, Header, true)
+	Panel:GetPropertyChangedSignal("Position"):Connect(function()
+		local P = Panel.Position
+		Library.KeybindList.SavedPos = { X = P.X.Offset; Y = P.Y.Offset }
+	end)
 	task.defer(function()
-		if Panel and Panel.Parent then
+		if not (Panel and Panel.Parent) then return end
+		if Library.KeybindList.SavedPos then
+			Panel.Position = ClampToScreen(Panel, UFO(Library.KeybindList.SavedPos.X, Library.KeybindList.SavedPos.Y))
+		else
 			Panel.Position = ClampToScreen(Panel, Panel.Position)
 		end
 	end)
@@ -3181,7 +3136,6 @@ Library.SetKeybindList = function(Enabled: boolean?)
 	Library.KeybindList.Rows = {}
 	Library.KeybindList.Accent = HeaderIcon
 
-	--@ re-show every registered keybind immediately
 	for _, Entry in pairs(Library.KeybindRegistry or {}) do
 		Library.UpdateKeybindList(Entry.Name, Entry.KeyText, Entry.Active, Entry.Mode)
 	end
@@ -3215,7 +3169,6 @@ Library.UpdateKeybindList = function(Name: string, KeyText: string, Active: bool
 		})
 		Add("UICorner", { Parent = Frame; CornerRadius = UD(0, 6); })
 
-		--@ fixed columns so long names never collide with keys
 		local NameLbl = Add("TextLabel", {
 			Parent = Frame;
 			Name = "Name";
@@ -3293,7 +3246,6 @@ Library._Toasts = {}
 Library.MaxNotifications = 4
 Library.NotifyToggles = true
 
---@ AirFlow-style notifications
 Library.Notify = function(propertyTable: {})
 	local Props = Overwrite({
 		Title = "Notification";
@@ -3308,7 +3260,6 @@ Library.Notify = function(propertyTable: {})
 	local Duration = Props.Duration or 4
 	local T = Library.Theme
 
-	--@ type colors (AirFlow `an` table)
 	local TypeColor = T.Text
 	if Props.Type == "Success" then
 		TypeColor = RGB(150, 220, 170)
@@ -3324,7 +3275,7 @@ Library.Notify = function(propertyTable: {})
 			Parent = Gui;
 			Name = "Notifications";
 			BackgroundTransparency = 1;
-			Size = UFO(300, 0);
+			Size = UFO(260, 0);
 			AutomaticSize = AS.Y;
 			ZIndex = 200;
 		})
@@ -3358,7 +3309,6 @@ Library.Notify = function(propertyTable: {})
 
 	Library._NotifyOrder = (Library._NotifyOrder or 0) + 1
 
-	--@ outer slot (drives height collapse on dismiss)
 	local Slot = Add("Frame", {
 		Parent = Library._NotifyHost;
 		Size = UD2(1, 0, 0, 0);
@@ -3369,7 +3319,6 @@ Library.Notify = function(propertyTable: {})
 
 	local SlideDir = (string.find(Pos, "Left") and -1) or 1
 
-	--@ sliding shell
 	local Shell = Add("Frame", {
 		Parent = Slot;
 		Position = UFO(320 * SlideDir, 0);
@@ -3378,7 +3327,6 @@ Library.Notify = function(propertyTable: {})
 		BackgroundTransparency = 1;
 	})
 
-	--@ soft drop shadow (AirFlow asset)
 	local Shadow = Add("ImageLabel", {
 		Parent = Shell;
 		Position = UFO(-20, -20);
@@ -3392,7 +3340,6 @@ Library.Notify = function(propertyTable: {})
 		ZIndex = 0;
 	})
 
-	--@ card
 	local Card = Add("CanvasGroup", {
 		Parent = Shell;
 		Size = UD2(1, 0, 0, 0);
@@ -3410,7 +3357,6 @@ Library.Notify = function(propertyTable: {})
 		Thickness = 1;
 	})
 
-	--@ top hairline (AirFlow M())
 	Add("Frame", {
 		Parent = Card;
 		Size = UD2(1, 0, 0, 1);
@@ -3420,7 +3366,6 @@ Library.Notify = function(propertyTable: {})
 		ZIndex = 2;
 	})
 
-	--@ accent corner glow (AirFlow x())
 	local Glow = Add("ImageLabel", {
 		Parent = Card;
 		AnchorPoint = V2(1, 0);
@@ -3447,10 +3392,10 @@ Library.Notify = function(propertyTable: {})
 	})
 	Add("UIPadding", {
 		Parent = Body;
-		PaddingLeft = UD(0, 16);
-		PaddingRight = UD(0, 16);
-		PaddingTop = UD(0, 14);
-		PaddingBottom = UD(0, 24);
+		PaddingLeft = UD(0, 12);
+		PaddingRight = UD(0, 10);
+		PaddingTop = UD(0, 8);
+		PaddingBottom = UD(0, 12);
 	})
 
 	local LeftPad = 0
@@ -3527,7 +3472,6 @@ Library.Notify = function(propertyTable: {})
 		})
 	end
 
-	--@ progress bar
 	local BarBG = Add("Frame", {
 		Parent = Card;
 		AnchorPoint = V2(0, 1);
@@ -3548,12 +3492,11 @@ Library.Notify = function(propertyTable: {})
 
 	task.defer(function()
 		if Slot.Parent then
-			local H = math.max(Card.AbsoluteSize.Y, 52)
+			local H = math.max(Card.AbsoluteSize.Y, 40)
 			Tween(Slot, { Size = UD2(1, 0, 0, H) }, 0.3, ES.Quint)
 		end
 	end)
 
-	--@ AirFlow animation: slide in (Back), fade card, shadow, drain bar
 	Tween(Shell, { Position = UFO(0, 0) }, 0.5, ES.Back)
 	Tween(Card, { GroupTransparency = 0 }, 0.3)
 	Tween(Shadow, { ImageTransparency = 0.6 }, 0.4)
@@ -3635,7 +3578,6 @@ UserInputService.InputBegan:Connect(function(Input, GameProcessed)
 	end
 end)
 
---@ build Config page UI onto a window
 Library.BuildConfigPage = function(self: Library, Window: any)
 	local Page = Window:Page({ Icon = "save" })
 	local Manager = Page:SubPage({ Name = "Configs" })
@@ -3743,10 +3685,9 @@ Library.BuildConfigPage = function(self: Library, Window: any)
 		Value = "default";
 		Placeholder = "name";
 		Flag = "ConfigName";
-		--@ does NOT change list selection — only used when saving a new/overwrite name
+
 	})
 
-	--@ Save can use the text box (new name). Load / Delete / Autoload use the *selected list row only*.
 	local function SelectedName(): string?
 		return Selected.Name
 	end
@@ -3829,7 +3770,6 @@ Library.BuildConfigPage = function(self: Library, Window: any)
 
 	RebuildList()
 
-	--@ theme colorpickers that actually apply
 	local function ThemePicker(LabelText: string, Key: string)
 		local Row = ThemeSection:Label({ Text = LabelText })
 		Row:Colorpicker({
@@ -3838,7 +3778,7 @@ Library.BuildConfigPage = function(self: Library, Window: any)
 			Callback = function(Color)
 				Library.Theme[Key] = Color
 				if Key == "Accent" then
-					--@ derive a darker accent for gradients
+
 					local H, S, V = Color:ToHSV()
 					Library.Theme.AccentDark = HSV(H, S, math.max(V * 0.55, 0.15))
 				end
@@ -3862,16 +3802,11 @@ Library.BuildConfigPage = function(self: Library, Window: any)
 	ThemePrev:Button({
 		Name = "Reset theme";
 		Callback = function()
-			Library.Theme.Accent = RGB(138, 156, 229)
-			Library.Theme.AccentDark = RGB(78, 88, 129)
-			Library.Theme.Background = RGB(9, 8, 8)
-			Library.Theme.Surface = RGB(15, 14, 15)
-			Library.Theme.SurfaceAlt = RGB(20, 20, 21)
-			Library.Theme.Border = RGB(36, 37, 37)
-			Library.Theme.SectionBorder = RGB(32, 33, 36)
-			Library.Theme.Text = RGB(255, 255, 255)
+			for Key, Color in pairs(Library.DefaultTheme) do
+				Library.Theme[Key] = Color
+			end
 			Library.ApplyTheme()
-			Library.Notify({ Title = "Theme"; Text = "Reset to default"; Type = "Info" })
+			Library.Notify({ Title = "Theme"; Content = "Reset to default"; Type = "Info" })
 		end;
 	})
 
@@ -3971,6 +3906,5 @@ Library.BuildConfigPage = function(self: Library, Window: any)
 
 	return Page
 end
-
 
 return Library
