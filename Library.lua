@@ -2102,6 +2102,9 @@ Library.Window = function(self: Library, propertyTable: {})
 	Add("UIScale", { Parent = Canvas; Scale = Library.UIScale })
 	Library.SetWatermark(Library.Watermark.Text, Library.Watermark.Enabled)
 	Library.SetKeybindList(Library.KeybindList.Enabled)
+	if Library._MountKeySystem then
+		Library._MountKeySystem(Window)
+	end
 
 	task.defer(function()
 		local Camera = workspace.CurrentCamera
@@ -2448,6 +2451,15 @@ Library.Autoload = nil
 Library.MenuKey = EKC.LeftAlt
 Library.MenuOpen = true
 Library.Windows = {}
+Library.Auth = {
+	Enabled = false;
+	Validated = true;
+	Token = nil;
+	ExpiresAt = nil;
+	ShowExpiry = false;
+	WatermarkExpiry = false;
+	Options = nil;
+}
 
 local function HasFS(): boolean
 	return typeof(writefile) == "function" and typeof(readfile) == "function"
@@ -2459,6 +2471,19 @@ local function EnsureFolder()
 			pcall(makefolder, Library.Folder)
 		end
 	end
+end
+
+Library.SetConfigFolder = function(Path: string)
+	if type(Path) ~= "string" or Path == "" then
+		return Library.Folder
+	end
+	Path = Path:gsub("^/+", ""):gsub("/+$", ""):gsub("%.%.", "")
+	if Path == "" then
+		Path = "Lumen"
+	end
+	Library.Folder = Path
+	EnsureFolder()
+	return Library.Folder
 end
 
 local function ConfigPath(Name: string): string
@@ -3562,6 +3587,9 @@ Library.Unload = function()
 end
 
 Library.ToggleMenu = function(State: boolean?)
+	if Library.Auth and Library.Auth.Enabled and not Library.Auth.Validated then
+		State = true
+	end
 	if State == nil then
 		State = not Library.MenuOpen
 	end
@@ -3934,5 +3962,491 @@ Library.BuildConfigPage = function(self: Library, Window: any)
 
 	return Page
 end
+
+
+local function FormatExpiry(ExpiresAt)
+	if not ExpiresAt or type(ExpiresAt) ~= "number" then
+		return "Lifetime"
+	end
+	local Left = math.floor(ExpiresAt - os.time())
+	if Left <= 0 then
+		return "Expired"
+	end
+	local Days = math.floor(Left / 86400)
+	local Hours = math.floor((Left % 86400) / 3600)
+	local Mins = math.floor((Left % 3600) / 60)
+	if Days > 0 then
+		return string.format("%dd %dh", Days, Hours)
+	end
+	if Hours > 0 then
+		return string.format("%dh %dm", Hours, Mins)
+	end
+	return string.format("%dm", math.max(Mins, 1))
+end
+
+Library.GetKeyExpiryText = function()
+	if not Library.Auth or not Library.Auth.Validated then
+		return ""
+	end
+	return FormatExpiry(Library.Auth.ExpiresAt)
+end
+
+Library.KeySystem = function(self, propertyTable)
+	local Opts = Overwrite({
+		Title = "Login";
+		Note = "";
+		Placeholder = "License key";
+		ButtonText = "Sign in";
+		Remember = true;
+		RememberFile = "auth_key.txt";
+		ShowExpiry = true;
+		WatermarkExpiry = false;
+		GetKey = nil;
+		Validate = nil;
+	}, propertyTable or {})
+
+	Library.Auth.Enabled = true
+	Library.Auth.Validated = false
+	Library.Auth.Token = nil
+	Library.Auth.ExpiresAt = nil
+	Library.Auth.ShowExpiry = Opts.ShowExpiry == true
+	Library.Auth.WatermarkExpiry = Opts.WatermarkExpiry == true
+	Library.Auth.Options = Opts
+	return Opts
+end
+
+local function AuthRememberPath()
+	local Opts = Library.Auth and Library.Auth.Options
+	local Name = (Opts and Opts.RememberFile) or "auth_key.txt"
+	return Library.Folder .. "/" .. Name
+end
+
+local function ReadRememberedKey()
+	if not HasFS() then
+		return nil
+	end
+	local Path = AuthRememberPath()
+	local Ok, Data = pcall(function()
+		if isfile and isfile(Path) then
+			return readfile(Path)
+		end
+		return nil
+	end)
+	if Ok and type(Data) == "string" and Data ~= "" then
+		return Data
+	end
+	return nil
+end
+
+local function WriteRememberedKey(Key, Remember)
+	if not HasFS() then
+		return
+	end
+	EnsureFolder()
+	local Path = AuthRememberPath()
+	if Remember and Key and Key ~= "" then
+		pcall(writefile, Path, Key)
+	else
+		pcall(function()
+			if isfile and isfile(Path) and delfile then
+				delfile(Path)
+			elseif writefile then
+				writefile(Path, "")
+			end
+		end)
+	end
+end
+
+local function RunValidate(Key, Finish)
+	local Opts = Library.Auth.Options
+	if not Opts or type(Opts.Validate) ~= "function" then
+		Finish(true, nil, nil)
+		return
+	end
+	local called = false
+	local function SafeFinish(Success, ExpiresAt, Err)
+		if called then return end
+		called = true
+		Finish(Success, ExpiresAt, Err)
+	end
+	local Ok, A, B, C = pcall(function()
+		return Opts.Validate(Key, SafeFinish)
+	end)
+	if not Ok then
+		SafeFinish(false, nil, tostring(A))
+		return
+	end
+	if A == true or A == false then
+		SafeFinish(A, B, C)
+	end
+end
+
+Library._MountKeySystem = function(Window)
+	if not Library.Auth or not Library.Auth.Enabled or Library.Auth.Validated then
+		return
+	end
+	local Canvas = Window and Window.Canvas
+	if not Canvas then
+		return
+	end
+	local Opts = Library.Auth.Options or {}
+	local T = Library.Theme
+
+	local Hidden = {}
+	for _, Ch in ipairs(Canvas:GetChildren()) do
+		if Ch:IsA("GuiObject") and Ch.Name ~= "UIScale" then
+			Hidden[Ch] = Ch.Visible
+			Ch.Visible = false
+		end
+	end
+
+	local Layer = Add("Frame", {
+		Parent = Canvas;
+		Name = "KeySystem";
+		Size = UFS(1, 1);
+		BackgroundColor3 = T.Background or RGB(9, 8, 8);
+		BorderSizePixel = 0;
+		ZIndex = 80;
+	})
+	Add("UICorner", { Parent = Layer; CornerRadius = UD(0, 5); })
+
+	Add("ImageLabel", {
+		Parent = Layer;
+		AnchorPoint = V2(0.5, 0.5);
+		Position = UFS(0.5, 0.35);
+		Size = UFO(420, 320);
+		BackgroundTransparency = 1;
+		Image = "rbxassetid://8992230677";
+		ImageColor3 = T.Accent;
+		ImageTransparency = 0.88;
+		ZIndex = 80;
+	})
+
+	local Form = Add("Frame", {
+		Parent = Layer;
+		AnchorPoint = V2(0.5, 0.5);
+		Position = UFS(0.5, 0.5);
+		Size = UFO(300, 0);
+		AutomaticSize = AS.Y;
+		BackgroundTransparency = 1;
+		ZIndex = 81;
+	})
+
+	Add("TextLabel", {
+		Parent = Form;
+		BackgroundTransparency = 1;
+		Size = UD2(1, 0, 0, 28);
+		FontFace = FN("rbxassetid://12187365364", FW.SemiBold, FS.Normal);
+		Text = Opts.Title or "Login";
+		TextColor3 = T.Text;
+		TextSize = 22;
+		ZIndex = 82;
+	})
+
+	local Under = Add("Frame", {
+		Parent = Form;
+		AnchorPoint = V2(0.5, 0);
+		Position = UD2(0.5, 0, 0, 32);
+		Size = UFO(56, 2);
+		BackgroundColor3 = T.Accent;
+		BorderSizePixel = 0;
+		ZIndex = 82;
+	})
+	Library.ThemeLink(Under, "BackgroundColor3", "Accent")
+
+	local KeyWrap = Add("Frame", {
+		Parent = Form;
+		Position = UFO(0, 52);
+		Size = UD2(1, 0, 0, 42);
+		BackgroundColor3 = T.SurfaceAlt or RGB(20, 20, 21);
+		BorderSizePixel = 0;
+		ZIndex = 82;
+	})
+	Add("UICorner", { Parent = KeyWrap; CornerRadius = UD(0, 8); })
+	local KeyIcon = Add("ImageLabel", {
+		Parent = KeyWrap;
+		AnchorPoint = V2(0, 0.5);
+		Position = UD2(0, 12, 0.5, 0);
+		Size = UFO(14, 14);
+		BackgroundTransparency = 1;
+		ImageColor3 = RGB(140, 144, 155);
+		ZIndex = 83;
+	})
+	pcall(function() KeyIcon.Image = ResolveIcon("key-round") end)
+	local KeyBox = Add("TextBox", {
+		Parent = KeyWrap;
+		Position = UFO(36, 0);
+		Size = UD2(1, -48, 1, 0);
+		BackgroundTransparency = 1;
+		PlaceholderText = Opts.Placeholder or "License key";
+		PlaceholderColor3 = RGB(120, 124, 135);
+		Text = "";
+		TextColor3 = T.Text;
+		FontFace = FN("rbxassetid://12187365364", FW.SemiBold, FS.Normal);
+		TextSize = 13;
+		TextXAlignment = TXA.Left;
+		ClearTextOnFocus = false;
+		ZIndex = 83;
+	})
+
+	local SignIn = Add("TextButton", {
+		Parent = Form;
+		Position = UFO(0, 106);
+		Size = UD2(1, 0, 0, 42);
+		BackgroundColor3 = T.Accent;
+		AutoButtonColor = false;
+		Text = Opts.ButtonText or "Sign in";
+		FontFace = FN("rbxassetid://12187365364", FW.SemiBold, FS.Normal);
+		TextSize = 14;
+		TextColor3 = RGB(255, 255, 255);
+		BorderSizePixel = 0;
+		ZIndex = 82;
+	})
+	Add("UICorner", { Parent = SignIn; CornerRadius = UD(0, 8); })
+	Library.ThemeLink(SignIn, "BackgroundColor3", "Accent")
+
+	local RememberOn = Opts.Remember ~= false
+	local RememberRow = Add("Frame", {
+		Parent = Form;
+		Position = UFO(0, 158);
+		Size = UD2(1, 0, 0, 20);
+		BackgroundTransparency = 1;
+		ZIndex = 82;
+	})
+	local RememberBtn = Add("TextButton", {
+		Parent = RememberRow;
+		Size = UFO(16, 16);
+		BackgroundColor3 = RememberOn and T.Accent or (T.SurfaceAlt or RGB(20, 20, 21));
+		Text = "";
+		AutoButtonColor = false;
+		BorderSizePixel = 0;
+		ZIndex = 83;
+	})
+	Add("UICorner", { Parent = RememberBtn; CornerRadius = UD(0, 4); })
+	Add("UIStroke", { Parent = RememberBtn; Color = T.Border or RGB(36, 37, 37); Thickness = 1; })
+	local Check = Add("ImageLabel", {
+		Parent = RememberBtn;
+		AnchorPoint = V2(0.5, 0.5);
+		Position = UFS(0.5, 0.5);
+		Size = UFO(11, 11);
+		BackgroundTransparency = 1;
+		ImageColor3 = RGB(255, 255, 255);
+		ImageTransparency = RememberOn and 0 or 1;
+		ZIndex = 84;
+	})
+	pcall(function() Check.Image = ResolveIcon("check") end)
+	Add("TextLabel", {
+		Parent = RememberRow;
+		Position = UFO(22, 0);
+		Size = UD2(1, -22, 1, 0);
+		BackgroundTransparency = 1;
+		Text = "Remember me";
+		TextColor3 = RGB(160, 160, 165);
+		FontFace = FN("rbxassetid://12187365364", FW.SemiBold, FS.Normal);
+		TextSize = 12;
+		TextXAlignment = TXA.Left;
+		ZIndex = 83;
+	})
+	RememberBtn.Activated:Connect(function()
+		RememberOn = not RememberOn
+		Tween(RememberBtn, { BackgroundColor3 = RememberOn and Library.Theme.Accent or Library.Theme.SurfaceAlt }, 0.12)
+		Tween(Check, { ImageTransparency = RememberOn and 0 or 1 }, 0.12)
+	end)
+
+	local Error = Add("TextLabel", {
+		Parent = Form;
+		Position = UFO(0, 182);
+		Size = UD2(1, 0, 0, 16);
+		BackgroundTransparency = 1;
+		Text = "";
+		TextColor3 = RGB(240, 120, 120);
+		FontFace = FN("rbxassetid://12187365364", FW.SemiBold, FS.Normal);
+		TextSize = 12;
+		ZIndex = 82;
+	})
+
+	local NoteY = 204
+	if type(Opts.Note) == "string" and Opts.Note ~= "" then
+		Add("TextLabel", {
+			Parent = Form;
+			Position = UFO(0, NoteY);
+			Size = UD2(1, 0, 0, 14);
+			BackgroundTransparency = 1;
+			Text = Opts.Note;
+			TextColor3 = RGB(100, 104, 115);
+			FontFace = FN("rbxassetid://12187365364", FW.SemiBold, FS.Normal);
+			TextSize = 11;
+			ZIndex = 82;
+		})
+		NoteY = NoteY + 18
+	end
+
+	if type(Opts.GetKey) == "string" and Opts.GetKey ~= "" then
+		local GetBtn = Add("TextButton", {
+			Parent = Form;
+			Position = UFO(0, NoteY);
+			Size = UD2(1, 0, 0, 16);
+			BackgroundTransparency = 1;
+			Text = "Get a key";
+			TextColor3 = T.Accent;
+			FontFace = FN("rbxassetid://12187365364", FW.SemiBold, FS.Normal);
+			TextSize = 12;
+			AutoButtonColor = false;
+			ZIndex = 82;
+		})
+		GetBtn.Activated:Connect(function()
+			pcall(function()
+				if setclipboard then
+					setclipboard(Opts.GetKey)
+					Library.Notify({ Title = "Key system"; Content = "Link copied"; Type = "Info"; Duration = 2 })
+				end
+			end)
+		end)
+	end
+
+	local Loading = Add("Frame", {
+		Parent = Canvas;
+		Name = "AuthLoading";
+		Size = UFS(1, 1);
+		BackgroundColor3 = T.Background or RGB(9, 8, 8);
+		BorderSizePixel = 0;
+		Visible = false;
+		ZIndex = 90;
+	})
+	Add("UICorner", { Parent = Loading; CornerRadius = UD(0, 5); })
+	local Spin = Add("ImageLabel", {
+		Parent = Loading;
+		AnchorPoint = V2(0.5, 0.5);
+		Position = UD2(0.5, 0, 0.48, 0);
+		Size = UFO(40, 40);
+		BackgroundTransparency = 1;
+		Image = "rbxassetid://4965945816";
+		ImageColor3 = T.Accent;
+		ZIndex = 91;
+	})
+	Library.ThemeLink(Spin, "ImageColor3", "Accent")
+	Add("TextLabel", {
+		Parent = Loading;
+		AnchorPoint = V2(0.5, 0);
+		Position = UD2(0.5, 0, 0.48, 28);
+		Size = UFO(160, 18);
+		BackgroundTransparency = 1;
+		Text = "Signing in...";
+		TextColor3 = RGB(160, 160, 165);
+		FontFace = FN("rbxassetid://12187365364", FW.SemiBold, FS.Normal);
+		TextSize = 13;
+		ZIndex = 91;
+	})
+	local SpinConn = RunService.RenderStepped:Connect(function(dt)
+		if Loading.Visible then
+			Spin.Rotation = (Spin.Rotation + dt * 240) % 360
+		end
+	end)
+
+	local function RevealMenu()
+		Layer:Destroy()
+		Loading:Destroy()
+		if SpinConn then SpinConn:Disconnect() end
+		for Ch, Vis in pairs(Hidden) do
+			if Ch and Ch.Parent then
+				Ch.Visible = Vis ~= false
+			end
+		end
+		if Library.Auth.ShowExpiry and Library.Auth.ExpiresAt and Window.Canvas then
+			local Footer = Window.Canvas:FindFirstChild("Footer")
+			if Footer then
+				local Exp = Footer:FindFirstChild("KeyExpiry")
+				if not Exp then
+					Exp = Add("TextLabel", {
+						Parent = Footer;
+						Name = "KeyExpiry";
+						AnchorPoint = V2(0.5, 0.5);
+						Position = UFS(0.5, 0.5);
+						AutomaticSize = AS.X;
+						Size = UFO(0, 13);
+						BackgroundTransparency = 1;
+						FontFace = FN("rbxassetid://12187365364", FW.SemiBold, FS.Normal);
+						TextColor3 = Library.Theme.Accent;
+						TextSize = 12;
+						TextTransparency = 0.15;
+					})
+					Library.ThemeLink(Exp, "TextColor3", "Accent")
+				end
+				local function Tick()
+					if not Exp or not Exp.Parent then return end
+					Exp.Text = "Key · " .. FormatExpiry(Library.Auth.ExpiresAt)
+					if Library.Auth.ExpiresAt and os.time() >= Library.Auth.ExpiresAt then
+						Library.Auth.Validated = false
+						Library.Auth.Token = nil
+						Library.Notify({ Title = "Key system"; Content = "License expired"; Type = "Error" })
+						pcall(function() Library.Unload() end)
+					end
+				end
+				Tick()
+				task.spawn(function()
+					while Exp and Exp.Parent and Library.Auth and Library.Auth.Validated do
+						Tick()
+						task.wait(30)
+					end
+				end)
+			end
+		end
+		if Library.Auth.WatermarkExpiry and Library.SetWatermark then
+			local Base = Library.Watermark.Text or "Lumen"
+			Library.SetWatermark(Base .. " | " .. FormatExpiry(Library.Auth.ExpiresAt), Library.Watermark.Enabled)
+		end
+		Library.Notify({ Title = "Key system"; Content = "Welcome back"; Type = "Success"; Duration = 2.5 })
+	end
+
+	local Busy = false
+	local function Attempt(Key)
+		if Busy then return end
+		Key = tostring(Key or ""):gsub("^%s+", ""):gsub("%s+$", "")
+		if Key == "" then
+			Error.Text = "Enter a license key."
+			return
+		end
+		Busy = true
+		Error.Text = ""
+		Layer.Visible = false
+		Loading.Visible = true
+
+		local finished = false
+		local function Finish(Success, ExpiresAt, Err)
+			if finished then return end
+			finished = true
+			if Success then
+				Library.Auth.Validated = true
+				Library.Auth.Token = tostring(os.clock()) .. tostring(math.random(100000, 999999))
+				Library.Auth.ExpiresAt = (type(ExpiresAt) == "number" and ExpiresAt) or nil
+				WriteRememberedKey(Key, RememberOn)
+				task.delay(0.55, RevealMenu)
+			else
+				Loading.Visible = false
+				Layer.Visible = true
+				Error.Text = Err or "Invalid key."
+				Busy = false
+			end
+		end
+
+		task.spawn(function()
+			RunValidate(Key, Finish)
+		end)
+	end
+
+	SignIn.Activated:Connect(function()
+		Attempt(KeyBox.Text)
+	end)
+	KeyBox.FocusLost:Connect(function(Enter)
+		if Enter then Attempt(KeyBox.Text) end
+	end)
+
+	local Saved = ReadRememberedKey()
+	if Saved then
+		KeyBox.Text = Saved
+		task.defer(function() Attempt(Saved) end)
+	end
+end
+
 
 return Library
