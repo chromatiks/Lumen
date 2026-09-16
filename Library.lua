@@ -655,6 +655,11 @@ local function StopSectionDrag(Commit: boolean)
 			NormalizeColumnOrders(SectionDrag.SourceParent)
 		end
 		NormalizeColumnOrders(TargetColumn)
+		if SectionDrag.SourceParent and SectionDrag.SourceParent ~= TargetColumn then
+			NormalizeColumnOrders(SectionDrag.SourceParent)
+		end
+		pcall(function() Library.SaveLayout() end)
+
 	else
 		Frame.Parent = SectionDrag.SourceParent
 		Frame.LayoutOrder = SectionDrag.SourceOrder
@@ -2075,18 +2080,22 @@ Library.Window = function(self: Library, propertyTable: {})
 	local Sidebar = Add("Frame", { Parent = Canvas; Name = "Sidebar"; BackgroundColor3 = Library.Theme.Surface; BorderColor3 = RGB(0, 0, 0); BorderSizePixel = 0; Size = UD2(0, 75, 1, 0); }) :: Frame
 	Library.ThemeLink(Sidebar, "BackgroundColor3", "Surface")
 
-	-- Author logo (top left) — larger than tab icons, soft bloom like reference
+	-- Author logo (top left) with top padding from window edge
 	local LogoWrap = Add("Frame", {
 		Parent = Sidebar;
 		Name = "Logo";
 		BackgroundTransparency = 1;
-		Size = UD2(1, 0, 0, 50);
+		Size = UD2(1, 0, 0, 58);
 		BorderSizePixel = 0;
+	})
+	Add("UIPadding", {
+		Parent = LogoWrap;
+		PaddingTop = UD(0, 10);
 	})
 	local LogoBtn = Add("ImageLabel", {
 		Parent = LogoWrap;
 		AnchorPoint = V2(0.5, 0.5);
-		Position = UFS(0.5, 0.5);
+		Position = UFS(0.5, 0.55);
 		Size = UFO(32, 32);
 		BackgroundTransparency = 1;
 		Image = ResolveIcon(Window.Logo or Window.Icon or "hash");
@@ -2098,25 +2107,27 @@ Library.Window = function(self: Library, propertyTable: {})
 	local LogoGlow = Add("ImageLabel", {
 		Parent = LogoWrap;
 		AnchorPoint = V2(0.5, 0.5);
-		Position = UFS(0.5, 0.5);
+		Position = UFS(0.5, 0.55);
 		Size = UFO(64, 64);
 		BackgroundTransparency = 1;
 		Image = "rbxassetid://8992230677";
-		ImageColor3 = RGB(255, 255, 255);
-		ImageTransparency = 0.72;
+		ImageColor3 = Library.Theme.Accent;
+		ImageTransparency = 0.75;
 		ZIndex = 1;
 	})
+	Library.ThemeLink(LogoGlow, "ImageColor3", "Accent")
 	local LogoGlow2 = Add("ImageLabel", {
 		Parent = LogoWrap;
 		AnchorPoint = V2(0.5, 0.5);
-		Position = UFS(0.5, 0.5);
-		Size = UFO(40, 40);
+		Position = UFS(0.5, 0.55);
+		Size = UFO(42, 42);
 		BackgroundTransparency = 1;
 		Image = "rbxassetid://8992230677";
-		ImageColor3 = RGB(255, 255, 255);
-		ImageTransparency = 0.85;
+		ImageColor3 = Library.Theme.Accent;
+		ImageTransparency = 0.88;
 		ZIndex = 2;
 	})
+	Library.ThemeLink(LogoGlow2, "ImageColor3", "Accent")
 	Window.LogoImage = LogoBtn
 	Window.SetLogo = function(_, Icon)
 		LogoBtn.Image = ResolveIcon(Icon)
@@ -2127,8 +2138,8 @@ Library.Window = function(self: Library, propertyTable: {})
 		Name = "PageButtons";
 		BackgroundTransparency = 1;
 		BorderSizePixel = 0;
-		Position = UFO(0, 50);
-		Size = UD2(1, 0, 1, -50);
+		Position = UFO(0, 58);
+		Size = UD2(1, 0, 1, -58);
 		CanvasSize = UD2(0, 0, 0, 0);
 		AutomaticCanvasSize = AS.Y;
 		ScrollBarThickness = 0;
@@ -2143,6 +2154,52 @@ Library.Window = function(self: Library, propertyTable: {})
 		HorizontalAlignment = HFA.Center;
 		SortOrder = SO.LayoutOrder;
 	})
+
+	Window.TabEditMode = false
+	local EditBtn = Add("TextButton", {
+		Parent = Sidebar;
+		Name = "TabEdit";
+		AnchorPoint = V2(0.5, 1);
+		Position = UD2(0.5, 0, 1, -10);
+		Size = UFO(28, 28);
+		BackgroundColor3 = Library.Theme.SurfaceAlt;
+		BackgroundTransparency = 0.3;
+		Text = "";
+		AutoButtonColor = false;
+		BorderSizePixel = 0;
+		ZIndex = 5;
+	})
+	Add("UICorner", { Parent = EditBtn; CornerRadius = UD(0, 6); })
+	local EditIcon = Add("ImageLabel", {
+		Parent = EditBtn;
+		BackgroundTransparency = 1;
+		Size = UFS(1, 1);
+		Image = ResolveIcon("menu");
+		ImageTransparency = 0.35;
+		ImageColor3 = RGB(255, 255, 255);
+		ScaleType = SCL.Fit;
+	})
+	Add("UIPadding", { Parent = EditBtn; PaddingTop = UD(0, 6); PaddingBottom = UD(0, 6); PaddingLeft = UD(0, 6); PaddingRight = UD(0, 6); })
+	EditBtn.Activated:Connect(function()
+		Window.TabEditMode = not Window.TabEditMode
+		Tween(EditIcon, {
+			ImageTransparency = Window.TabEditMode and 0 or 0.35;
+			ImageColor3 = Window.TabEditMode and Library.Theme.Accent or RGB(255, 255, 255);
+		}, 0.15)
+		Tween(EditBtn, {
+			BackgroundColor3 = Window.TabEditMode and Library.Theme.Accent or Library.Theme.SurfaceAlt;
+			BackgroundTransparency = Window.TabEditMode and 0.15 or 0.3;
+		}, 0.15)
+		Library.Notify({
+			Title = "Tabs";
+			Text = Window.TabEditMode and "Drag tabs to rearrange" or "Tab order locked";
+			Type = "Info";
+			Duration = 1.8;
+		})
+	end)
+	Window.TabEditButton = EditBtn
+	-- leave room for edit button
+	PageButtons.Size = UD2(1, 0, 1, -58 - 40)
 	local Header = Add("Frame", { Parent = Canvas; Name = "Header"; BackgroundColor3 = Library.Theme.SurfaceAlt; BorderColor3 = RGB(0, 0, 0); BorderSizePixel = 0; Position = UFO(75, 0); Size = UD2(1, -75, 0, 50); }) :: Frame
 	Library.ThemeLink(Header, "BackgroundColor3", "SurfaceAlt")
 	local SubPages = Add("Frame", { Parent = Header; Name = "SubPages"; AutomaticSize = AS.X; BackgroundColor3 = RGB(255, 255, 255); BackgroundTransparency = 1; BorderColor3 = RGB(0, 0, 0); BorderSizePixel = 0; Size = UFS(0, 1); }) :: Frame
@@ -2274,50 +2331,36 @@ Library.Window = function(self: Library, propertyTable: {})
 			Size = UFO(45, 45);
 			Text = "";
 			ClipsDescendants = false;
+			LayoutOrder = #Window.Pages;
 		}) :: TextButton
 
-		-- Soft left-edge selection glow (reference style)
-		local IndBloom = Add("ImageLabel", {
+		-- Aether-style tab glow (rbxassetid://18245826428 slice)
+		local Glow = Add("Frame", {
 			Parent = PageButton;
-			Name = "IndicatorBloom";
-			AnchorPoint = V2(0, 0.5);
-			Position = UD2(0, -8, 0.5, 0);
-			Size = UFO(36, 44);
+			Name = "Glow";
 			BackgroundTransparency = 1;
-			Image = "rbxassetid://8992230677";
-			ImageColor3 = RGB(255, 255, 255);
-			ImageTransparency = 1;
+			Size = UD2(0, 20, 1, 0);
+			BorderSizePixel = 0;
+			BackgroundColor3 = Library.Theme.Accent;
 			ZIndex = 1;
 		})
-		Add("UIGradient", {
-			Parent = IndBloom;
-			Transparency = NS{
-				NSK(0, 0.15),
-				NSK(0.4, 0.55),
-				NSK(1, 1),
-			};
-		})
-		local Indicator = Add("Frame", {
-			Parent = PageButton;
-			Name = "Indicator";
-			AnchorPoint = V2(0, 0.5);
-			Position = UD2(0, 0, 0.5, 0);
-			Size = UFO(3, 24);
-			BackgroundColor3 = RGB(255, 255, 255);
-			BorderSizePixel = 0;
+		Add("UICorner", { Parent = Glow; CornerRadius = UD(0, 3); })
+		Library.ThemeLink(Glow, "BackgroundColor3", "Accent")
+		local GlowImage = Add("ImageLabel", {
+			Parent = Glow;
+			Name = "GlowImage";
+			ImageColor3 = Library.Theme.Accent;
+			ScaleType = SCL.Slice;
+			ImageTransparency = 1;
 			BackgroundTransparency = 1;
+			Size = UD2(1, 20, 1, 20);
+			Image = "rbxassetid://18245826428";
+			Position = UD2(0, -20, 0, -10);
 			ZIndex = 2;
+			BorderSizePixel = 0;
+			SliceCenter = Rect.new(V2(20, 20), V2(80, 80));
 		})
-		Add("UICorner", { Parent = Indicator; CornerRadius = UD(1, 0); })
-		Add("UIGradient", {
-			Parent = Indicator;
-			Transparency = NS{
-				NSK(0, 0.7),
-				NSK(0.5, 0),
-				NSK(1, 0.7),
-			};
-			Rotation = 90;
-		})
+		Library.ThemeLink(GlowImage, "ImageColor3", "Accent")
 
 		local PageIcon = Add("ImageLabel", {
 			Parent = PageButton;
@@ -2338,15 +2381,16 @@ Library.Window = function(self: Library, propertyTable: {})
 			PaddingTop = UD(0, 12);
 		})
 
-		Page.Indicator = Indicator
-		Page.IndicatorBloom = IndBloom
+		Page.Button = PageButton
+		Page.Glow = Glow
+		Page.GlowImage = GlowImage
 		Page.IconLabel = PageIcon
+		Page.LayoutOrder = PageButton.LayoutOrder
 
 		PageContent(Page, Pages, Window.Pages, function()
 			Page.Opened = true
-			Tween(Indicator, { BackgroundTransparency = 0 }, 0.2)
-			Tween(IndBloom, { ImageTransparency = 0.5 }, 0.25)
-			Tween(PageIcon, { ImageTransparency = 0 }, 0.2)
+			Tween(GlowImage, { ImageTransparency = 0 }, 0.2)
+			Tween(PageIcon, { ImageTransparency = 0, ImageColor3 = Library.Theme.Accent }, 0.2)
 
 			for _, SubPage in Page.SubPages do
 				SubPage.Button.Visible = true
@@ -2358,9 +2402,8 @@ Library.Window = function(self: Library, propertyTable: {})
 			end
 		end, function()
 			Page.Opened = false
-			Tween(Indicator, { BackgroundTransparency = 1 }, 0.16)
-			Tween(IndBloom, { ImageTransparency = 1 }, 0.16)
-			Tween(PageIcon, { ImageTransparency = 0.45 }, 0.16)
+			Tween(GlowImage, { ImageTransparency = 1 }, 0.16)
+			Tween(PageIcon, { ImageTransparency = 0.45, ImageColor3 = RGB(255, 255, 255) }, 0.16)
 
 			for _, SubPage in Page.SubPages do
 				SubPage.Button.Visible = false
@@ -2370,6 +2413,47 @@ Library.Window = function(self: Library, propertyTable: {})
 				Page.ActiveSubPage.Close()
 			end
 		end)
+
+		-- Tab rearrange when Window.TabEditMode
+		do
+			local Dragging = false
+			local StartY = 0
+			local StartOrder = 0
+			PageButton.InputBegan:Connect(function(Input)
+				if not Window.TabEditMode then return end
+				if Input.UserInputType ~= UIT.MouseButton1 and Input.UserInputType ~= UIT.Touch then return end
+				Dragging = true
+				StartY = Input.Position.Y
+				StartOrder = PageButton.LayoutOrder
+				local Conn
+				Conn = Input.Changed:Connect(function()
+					if Input.UserInputState == Enum.UserInputState.End then
+						Dragging = false
+						if Conn then Conn:Disconnect() end
+						Library.SaveLayout()
+					end
+				end)
+			end)
+			UserInputService.InputChanged:Connect(function(Input)
+				if not Dragging or not Window.TabEditMode then return end
+				if Input.UserInputType ~= UIT.MouseMovement and Input.UserInputType ~= UIT.Touch then return end
+				local Dy = Input.Position.Y - StartY
+				local Step = 50
+				local Delta = math.floor((Dy / Step) + 0.5)
+				local NewOrder = math.max(0, StartOrder + Delta)
+				if NewOrder ~= PageButton.LayoutOrder then
+					-- swap with page at target order
+					for _, Other in Window.Pages do
+						if Other ~= Page and Other.Button and Other.Button.LayoutOrder == NewOrder then
+							Other.Button.LayoutOrder = PageButton.LayoutOrder
+							Other.LayoutOrder = Other.Button.LayoutOrder
+						end
+					end
+					PageButton.LayoutOrder = NewOrder
+					Page.LayoutOrder = NewOrder
+				end
+			end)
+		end
 
 		Page.SubPage = function(self: Library, propertyTable: {})
 			local SubPage = Overwrite({
@@ -2674,10 +2758,116 @@ local function DecodeColor(Value: any): Color3?
 	return nil
 end
 
+
+Library.GetLayout = function()
+	local Layout = {
+		Tabs = {};
+		Sections = {};
+		KeybindList = nil;
+		Watermark = nil;
+	}
+	for _, Win in Library.Windows do
+		for _, Page in (Win.Pages or {}) do
+			local Id = tostring(Page.Icon or "") .. ":" .. tostring(Page.Button and Page.Button.LayoutOrder or 0)
+			if Page.Button then
+				TIS(Layout.Tabs, {
+					Icon = Page.Icon;
+					Order = Page.Button.LayoutOrder;
+				})
+			end
+			for _, Sub in (Page.SubPages or {}) do
+				-- sections live under subpages via Library.Sections
+			end
+		end
+	end
+	for _, Section in (Library.Sections or {}) do
+		if Section.Frame then
+			TIS(Layout.Sections, {
+				Name = Section.Name;
+				Side = Section.Side;
+				Order = Section.Frame.LayoutOrder;
+			})
+		end
+	end
+	if Library.KeybindList and Library.KeybindList.Frame then
+		local P = Library.KeybindList.Frame.Position
+		Layout.KeybindList = { X = P.X.Offset; Y = P.Y.Offset }
+	end
+	if Library.Watermark and Library.Watermark.Frame then
+		local P = Library.Watermark.Frame.Position
+		Layout.Watermark = { X = P.X.Offset; Y = P.Y.Offset }
+	end
+	return Layout
+end
+
+Library.SaveLayout = function()
+	-- persisted via next config save; also write layout.json if FS available
+	if not HasFS or not HasFS() then
+		return
+	end
+	EnsureFolder()
+	local Ok, Enc = pcall(function()
+		return game:GetService("HttpService"):JSONEncode(Library.GetLayout())
+	end)
+	if Ok and Enc and writefile then
+		pcall(writefile, Library.Folder .. "/layout.json", Enc)
+	end
+end
+
+Library.ApplyLayout = function(Layout)
+	if type(Layout) ~= "table" then return end
+	if type(Layout.Tabs) == "table" then
+		for _, Win in Library.Windows do
+			for _, Entry in Layout.Tabs do
+				for _, Page in (Win.Pages or {}) do
+					if Page.Icon == Entry.Icon and Page.Button and type(Entry.Order) == "number" then
+						Page.Button.LayoutOrder = Entry.Order
+						Page.LayoutOrder = Entry.Order
+					end
+				end
+			end
+		end
+	end
+	if type(Layout.Sections) == "table" then
+		for _, Entry in Layout.Sections do
+			for _, Section in (Library.Sections or {}) do
+				if Section.Name == Entry.Name and Section.Frame then
+					if Entry.Order then Section.Frame.LayoutOrder = Entry.Order end
+					if Entry.Side and Section.Side ~= Entry.Side then
+						-- move column if possible
+						local Frame = Section.Frame
+						local Parent = Frame.Parent and Frame.Parent.Parent
+						if Parent then
+							local Col = Parent:FindFirstChild(Entry.Side)
+							if Col then
+								Frame.Parent = Col
+								Section.Side = Entry.Side
+							end
+						end
+					end
+				end
+			end
+		end
+	end
+	if Layout.KeybindList and Library.KeybindList and Library.KeybindList.Frame then
+		local X, Y = Layout.KeybindList.X, Layout.KeybindList.Y
+		if type(X) == "number" and type(Y) == "number" then
+			Library.KeybindList.Frame.Position = ClampToScreen(Library.KeybindList.Frame, UFO(X, Y))
+		end
+	end
+	if Layout.Watermark and Library.Watermark and Library.Watermark.Frame then
+		local X, Y = Layout.Watermark.X, Layout.Watermark.Y
+		if type(X) == "number" and type(Y) == "number" then
+			Library.Watermark.Frame.Position = ClampToScreen(Library.Watermark.Frame, UFO(X, Y))
+		end
+	end
+end
+
 Library.GetConfig = function()
 	local Data = {
 		Flags = {};
 		Theme = {};
+		Layout = Library.GetLayout and Library.GetLayout() or {};
 		MenuKey = Library.MenuKey and Library.MenuKey.Name or "LeftAlt";
 	}
 
@@ -4474,193 +4664,3 @@ Library._MountKeySystem = function(Window)
 	})
 	RememberBtn.Activated:Connect(function()
 		RememberOn = not RememberOn
-		Tween(RememberBtn, { BackgroundColor3 = RememberOn and Library.Theme.Accent or Library.Theme.Surface }, 0.12)
-		Tween(Check, { TextTransparency = RememberOn and 0 or 1; TextColor3 = RememberOn and RGB(255, 255, 255) or Library.Theme.Accent }, 0.12)
-		Tween(RemStroke, { Transparency = RememberOn and 1 or 0 }, 0.12)
-	end)
-
-	local Error = Add("TextLabel", {
-		Parent = Form;
-		Position = UFO(0, 198);
-		Size = UD2(1, 0, 0, 16);
-		BackgroundTransparency = 1;
-		Text = "";
-		TextColor3 = RGB(240, 120, 120);
-		FontFace = FN("rbxassetid://12187365364", FW.SemiBold, FS.Normal);
-		TextSize = 12;
-		ZIndex = 82;
-	})
-
-	local NoteY = 178
-	if type(Opts.GetKey) == "string" and Opts.GetKey ~= "" then
-		local GetBtn = Add("TextButton", {
-			Parent = Form;
-			Position = UFO(0, NoteY);
-			Size = UD2(1, 0, 0, 16);
-			BackgroundTransparency = 1;
-			Text = "Get a key";
-			TextColor3 = T.Accent;
-			FontFace = FN("rbxassetid://12187365364", FW.SemiBold, FS.Normal);
-			TextSize = 12;
-			AutoButtonColor = false;
-			ZIndex = 82;
-		})
-		GetBtn.Activated:Connect(function()
-			pcall(function()
-				if setclipboard then
-					setclipboard(Opts.GetKey)
-					Library.Notify({ Title = "Key system"; Content = "Link copied"; Type = "Info"; Duration = 2 })
-				end
-			end)
-		end)
-	end
-
-	local Loading = Add("Frame", {
-		Parent = Canvas;
-		Name = "AuthLoading";
-		Size = UFS(1, 1);
-		BackgroundColor3 = T.Background or RGB(9, 8, 8);
-		BorderSizePixel = 0;
-		Visible = false;
-		ZIndex = 90;
-	})
-	Add("UICorner", { Parent = Loading; CornerRadius = UD(0, 5); })
-	Add("UIStroke", { Parent = Loading; ApplyStrokeMode = ASM.Border; Color = T.Border or RGB(36, 37, 37); })
-	Add("UIShadow", { Parent = Loading; BlurRadius = UD(0, 20); Spread = UFO(5, 5); Transparency = 0.65; })
-	Library.ThemeLink(Loading, "BackgroundColor3", "Background")
-	local Spin = Add("ImageLabel", {
-		Parent = Loading;
-		AnchorPoint = V2(0.5, 0.5);
-		Position = UD2(0.5, 0, 0.48, 0);
-		Size = UFO(40, 40);
-		BackgroundTransparency = 1;
-		Image = "rbxassetid://4965945816";
-		ImageColor3 = T.Accent;
-		ZIndex = 91;
-	})
-	Library.ThemeLink(Spin, "ImageColor3", "Accent")
-	Add("TextLabel", {
-		Parent = Loading;
-		AnchorPoint = V2(0.5, 0);
-		Position = UD2(0.5, 0, 0.48, 28);
-		Size = UFO(160, 18);
-		BackgroundTransparency = 1;
-		Text = "Signing in...";
-		TextColor3 = RGB(160, 160, 165);
-		FontFace = FN("rbxassetid://12187365364", FW.SemiBold, FS.Normal);
-		TextSize = 13;
-		ZIndex = 91;
-	})
-	local SpinConn = RunService.RenderStepped:Connect(function(dt)
-		if Loading.Visible then
-			Spin.Rotation = (Spin.Rotation + dt * 240) % 360
-		end
-	end)
-
-	local function RevealMenu()
-		Layer:Destroy()
-		Loading:Destroy()
-		if SpinConn then SpinConn:Disconnect() end
-		for Ch, Vis in pairs(Hidden) do
-			if Ch and Ch.Parent then
-				Ch.Visible = Vis ~= false
-			end
-		end
-		if Library.Auth.ShowExpiry and Library.Auth.ExpiresAt and Window.Canvas then
-			local Footer = Window.Canvas:FindFirstChild("Footer")
-			if Footer then
-				local Exp = Footer:FindFirstChild("KeyExpiry")
-				if not Exp then
-					Exp = Add("TextLabel", {
-						Parent = Footer;
-						Name = "KeyExpiry";
-						AnchorPoint = V2(0.5, 0.5);
-						Position = UFS(0.5, 0.5);
-						AutomaticSize = AS.X;
-						Size = UFO(0, 13);
-						BackgroundTransparency = 1;
-						FontFace = FN("rbxassetid://12187365364", FW.SemiBold, FS.Normal);
-						TextColor3 = Library.Theme.Accent;
-						TextSize = 12;
-						TextTransparency = 0.15;
-					})
-					Library.ThemeLink(Exp, "TextColor3", "Accent")
-				end
-				local function Tick()
-					if not Exp or not Exp.Parent then return end
-					Exp.Text = "Key · " .. Library.FormatExpiry(Library.Auth.ExpiresAt)
-					if Library.Auth.ExpiresAt and os.time() >= Library.Auth.ExpiresAt then
-						Library.Auth.Validated = false
-						Library.Auth.Token = nil
-						Library.Notify({ Title = "Key system"; Content = "License expired"; Type = "Error" })
-						pcall(function() Library.Unload() end)
-					end
-				end
-				Tick()
-				task.spawn(function()
-					while Exp and Exp.Parent and Library.Auth and Library.Auth.Validated do
-						Tick()
-						task.wait(30)
-					end
-				end)
-			end
-		end
-		if Library.Auth.WatermarkExpiry and Library.SetWatermark then
-			local Base = Library.Watermark.BaseText or Library.Watermark.Text or "Lumen"
-			Library.SetWatermark(Base, Library.Watermark.Enabled)
-		end
-		Library.Notify({ Title = "Key system"; Content = "Welcome back"; Type = "Success"; Duration = 2.5 })
-	end
-
-	local Busy = false
-	local function Attempt(Key)
-		if Busy then return end
-		Key = tostring(Key or ""):gsub("^%s+", ""):gsub("%s+$", "")
-		if Key == "" then
-			Error.Text = "Enter a license key."
-			return
-		end
-		Busy = true
-		Error.Text = ""
-		Layer.Visible = false
-		Loading.Visible = true
-
-		local finished = false
-		local function Finish(Success, ExpiresAt, Err)
-			if finished then return end
-			finished = true
-			if Success then
-				Library.Auth.Validated = true
-				Library.Auth.Token = tostring(os.clock()) .. tostring(math.random(100000, 999999))
-				Library.Auth.ExpiresAt = (type(ExpiresAt) == "number" and ExpiresAt) or nil
-				WriteRememberedKey(Key, RememberOn)
-				task.delay(0.55, RevealMenu)
-			else
-				Loading.Visible = false
-				Layer.Visible = true
-				Error.Text = Err or "Invalid key."
-				Busy = false
-			end
-		end
-
-		task.spawn(function()
-			RunValidate(Key, Finish)
-		end)
-	end
-
-	SignIn.Activated:Connect(function()
-		Attempt(KeyBox.Text)
-	end)
-	KeyBox.FocusLost:Connect(function(Enter)
-		if Enter then Attempt(KeyBox.Text) end
-	end)
-
-	local Saved = ReadRememberedKey()
-	if Saved then
-		KeyBox.Text = Saved
-		task.defer(function() Attempt(Saved) end)
-	end
-end
-
-
-return Library
