@@ -2446,26 +2446,27 @@ Library.Window = function(self: Library, propertyTable: {})
 end
 
 Library.Theme = {
-	Accent = RGB(138, 156, 229),
-	AccentDark = RGB(78, 88, 129),
-	Background = RGB(9, 8, 8),
-	Surface = RGB(15, 14, 15),
-	SurfaceAlt = RGB(20, 20, 21),
-	Border = RGB(36, 37, 37),
-	SectionBorder = RGB(32, 33, 36),
+	Accent = RGB(228, 232, 240),
+	AccentDark = RGB(140, 148, 165),
+	Background = RGB(11, 12, 15),
+	Surface = RGB(17, 18, 22),
+	SurfaceAlt = RGB(22, 23, 28),
+	Border = RGB(30, 32, 38),
+	SectionBorder = RGB(26, 28, 34),
 	Text = RGB(255, 255, 255),
-	TextDim = RGB(180, 184, 200),
+	TextDim = RGB(145, 150, 165),
 }
 
 Library.DefaultTheme = {
-	Accent = RGB(138, 156, 229),
-	AccentDark = RGB(78, 88, 129),
-	Background = RGB(9, 8, 8),
-	Surface = RGB(15, 14, 15),
-	SurfaceAlt = RGB(20, 20, 21),
-	Border = RGB(36, 37, 37),
-	SectionBorder = RGB(32, 33, 36),
+	Accent = RGB(228, 232, 240),
+	AccentDark = RGB(140, 148, 165),
+	Background = RGB(11, 12, 15),
+	Surface = RGB(17, 18, 22),
+	SurfaceAlt = RGB(22, 23, 28),
+	Border = RGB(30, 32, 38),
+	SectionBorder = RGB(26, 28, 34),
 	Text = RGB(255, 255, 255),
+	TextDim = RGB(145, 150, 165),
 }
 
 Library.ThemeLinks = {}
