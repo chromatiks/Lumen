@@ -1302,7 +1302,7 @@ Library.Elements.Dropdown = function(self: Library, propertyTable: {})
 
 			Button.MouseEnter:Connect(function()
 				if not IsSelected(Option) then
-					Tween(Button, { BackgroundTransparency = 0.35; BackgroundColor3 = RGB(32, 34, 42) }, 0.08)
+					Tween(Button, { BackgroundTransparency = 0.35; BackgroundColor3 = Library.Theme.SurfaceAlt }, 0.08)
 				end
 			end)
 			Button.MouseLeave:Connect(function()
@@ -1545,13 +1545,16 @@ Library.Elements.Button = function(self: Library, propertyTable: {})
 		TextTransparency = 0.12;
 	})
 	Add("UICorner", { Parent = Click; CornerRadius = UD(0, 6); })
-	Add("UIStroke", { Parent = Click; ApplyStrokeMode = ASM.Border; Color = RGB(40, 41, 46); })
+	local BtnStroke = Add("UIStroke", { Parent = Click; ApplyStrokeMode = ASM.Border; Color = Library.Theme.Border; })
+	Library.ThemeLink(BtnStroke, "Color", "Border")
 	local Grad = Add("UIGradient", {
 		Parent = Click;
-		Color = CS{ CSK(0, RGB(78, 88, 129)), CSK(1, RGB(138, 156, 229)) };
+		Color = CS{ CSK(0, Library.Theme.AccentDark), CSK(1, Library.Theme.Accent) };
 		Rotation = -90;
 		Enabled = false;
 	})
+	Library.ThemeLink(Grad, "Gradient", "AccentDark", "Accent")
+	Library.ThemeLink(Click, "BackgroundColor3", "SurfaceAlt")
 
 	Click.MouseEnter:Connect(function()
 		Grad.Enabled = true
@@ -1559,7 +1562,7 @@ Library.Elements.Button = function(self: Library, propertyTable: {})
 	end)
 	Click.MouseLeave:Connect(function()
 		Grad.Enabled = false
-		Tween(Click, { BackgroundColor3 = RGB(22, 22, 24); TextColor3 = RGB(255, 255, 255); TextTransparency = 0.12 }, 0.12)
+		Tween(Click, { BackgroundColor3 = Library.Theme.SurfaceAlt; TextColor3 = Library.Theme.Text; TextTransparency = 0.12 }, 0.12)
 	end)
 	Click.Activated:Connect(function()
 		Button.Callback()
@@ -2447,27 +2450,27 @@ Library.Window = function(self: Library, propertyTable: {})
 end
 
 Library.Theme = {
-	Accent = RGB(228, 232, 240),
-	AccentDark = RGB(140, 148, 165),
-	Background = RGB(11, 12, 15),
-	Surface = RGB(17, 18, 22),
-	SurfaceAlt = RGB(22, 23, 28),
-	Border = RGB(30, 32, 38),
-	SectionBorder = RGB(26, 28, 34),
+	Accent = RGB(138, 156, 229),
+	AccentDark = RGB(78, 88, 129),
+	Background = RGB(9, 8, 8),
+	Surface = RGB(15, 14, 15),
+	SurfaceAlt = RGB(20, 20, 21),
+	Border = RGB(36, 37, 37),
+	SectionBorder = RGB(32, 33, 36),
 	Text = RGB(255, 255, 255),
-	TextDim = RGB(145, 150, 165),
+	TextDim = RGB(180, 184, 200),
 }
 
 Library.DefaultTheme = {
-	Accent = RGB(228, 232, 240),
-	AccentDark = RGB(140, 148, 165),
-	Background = RGB(11, 12, 15),
-	Surface = RGB(17, 18, 22),
-	SurfaceAlt = RGB(22, 23, 28),
-	Border = RGB(30, 32, 38),
-	SectionBorder = RGB(26, 28, 34),
+	Accent = RGB(138, 156, 229),
+	AccentDark = RGB(78, 88, 129),
+	Background = RGB(9, 8, 8),
+	Surface = RGB(15, 14, 15),
+	SurfaceAlt = RGB(20, 20, 21),
+	Border = RGB(36, 37, 37),
+	SectionBorder = RGB(32, 33, 36),
 	Text = RGB(255, 255, 255),
-	TextDim = RGB(145, 150, 165),
+	TextDim = RGB(180, 184, 200),
 }
 
 Library.ThemeLinks = {}
@@ -2481,23 +2484,30 @@ end
 
 Library.ApplyTheme = function()
 	local T = Library.Theme
+	if not T then
+		return
+	end
 
+	-- Always derive AccentDark from Accent when accent changes
 	if T.Accent then
 		local H, S, V = T.Accent:ToHSV()
-		if not T.AccentDark then
-			T.AccentDark = HSV(H, S, math.max(V * 0.55, 0.15))
+		T.AccentDark = HSV(H, math.clamp(S * 0.95, 0, 1), math.max(V * 0.55, 0.12))
+	end
+
+	local function PaintGrad(Grad: UIGradient?)
+		if Grad and Grad:IsA("UIGradient") then
+			Grad.Color = CS{ CSK(0, T.AccentDark or T.Accent), CSK(1, T.Accent) }
 		end
 	end
 
+	-- ThemeLink registry
 	local Alive = {}
 	for _, Link in Library.ThemeLinks do
 		if Link.Object and Link.Object.Parent then
 			TIS(Alive, Link)
 			if Link.Property == "Gradient" and Link.Object:IsA("UIGradient") then
-				local A = T[Link.Key] or T.AccentDark
-				local B = T[Link.Key2 or "Accent"] or T.Accent
-				Link.Object.Color = CS{ CSK(0, A), CSK(1, B) }
-			elseif Link.Property and T[Link.Key] then
+				PaintGrad(Link.Object)
+			elseif Link.Property and T[Link.Key] ~= nil then
 				pcall(function()
 					Link.Object[Link.Property] = T[Link.Key]
 				end)
@@ -2506,21 +2516,20 @@ Library.ApplyTheme = function()
 	end
 	Library.ThemeLinks = Alive
 
-	local function PaintGrad(Grad: UIGradient?)
-		if Grad then
-			Grad.Color = CS{ CSK(0, T.AccentDark), CSK(1, T.Accent) }
-		end
-	end
-
 	for _, Win in Library.Windows do
 		local Canvas = Win.Canvas
-		if Canvas then
-		Canvas.BackgroundColor3 = T.Background
+		if not Canvas then
+			continue
+		end
+		pcall(function() Canvas.BackgroundColor3 = T.Background end)
+		local Stroke = Canvas:FindFirstChildOfClass("UIStroke")
+		if Stroke then pcall(function() Stroke.Color = T.Border end) end
+
 		local Header = Canvas:FindFirstChild("Header")
 		if Header then
 			Header.BackgroundColor3 = T.SurfaceAlt
-			local Stroke = Header:FindFirstChildOfClass("UIStroke")
-			if Stroke then Stroke.Color = T.Border end
+			local Hs = Header:FindFirstChildOfClass("UIStroke")
+			if Hs then Hs.Color = T.Border end
 			local Search = Header:FindFirstChild("Search")
 			if Search and Search:IsA("GuiObject") then
 				Search.BackgroundColor3 = T.Background
@@ -2529,8 +2538,8 @@ Library.ApplyTheme = function()
 		local Footer = Canvas:FindFirstChild("Footer")
 		if Footer then
 			Footer.BackgroundColor3 = T.Surface
-			local Stroke = Footer:FindFirstChildOfClass("UIStroke")
-			if Stroke then Stroke.Color = T.Border end
+			local Fs = Footer:FindFirstChildOfClass("UIStroke")
+			if Fs then Fs.Color = T.Border end
 			for _, L in Footer:GetChildren() do
 				if L:IsA("TextLabel") then
 					L.TextColor3 = T.Text
@@ -2540,18 +2549,44 @@ Library.ApplyTheme = function()
 		local Sidebar = Canvas:FindFirstChild("Sidebar")
 		if Sidebar then
 			Sidebar.BackgroundColor3 = T.Surface
+			local Logo = Sidebar:FindFirstChild("Logo")
+			if Logo then
+				for _, Ch in Logo:GetChildren() do
+					if Ch:IsA("ImageLabel") then
+						Ch.ImageColor3 = T.Accent
+					end
+				end
+			end
+			local PB = Sidebar:FindFirstChild("PageButtons")
+			if PB and PB:IsA("ScrollingFrame") then
+				PB.ScrollBarImageColor3 = T.Accent
+			end
 		end
 
 		for _, Page in (Win.Pages or {}) do
 			if Page.Gradient then PaintGrad(Page.Gradient) end
-			if Page.Button then
-
-				if Page.Opened then
-					Page.Button.BackgroundTransparency = 0
-					if Page.IconLabel then
-						Page.IconLabel.ImageTransparency = 0
-						Page.IconLabel.ImageColor3 = RGB(0, 0, 0)
+			if Page.Indicator then
+				pcall(function() Page.Indicator.BackgroundColor3 = RGB(255, 255, 255) end)
+			end
+			if Page.IndicatorGlow then
+				pcall(function()
+					if Page.IndicatorGlow:IsA("Frame") then
+						Page.IndicatorGlow.BackgroundColor3 = T.Accent
+					elseif Page.IndicatorGlow:IsA("ImageLabel") then
+						Page.IndicatorGlow.ImageColor3 = T.Accent
 					end
+				end)
+			end
+			if Page.IndicatorBloom then
+				pcall(function() Page.IndicatorBloom.ImageColor3 = T.Accent end)
+			end
+			if Page.IconLabel then
+				if Page.Opened then
+					Page.IconLabel.ImageTransparency = 0
+					Page.IconLabel.ImageColor3 = RGB(255, 255, 255)
+				else
+					Page.IconLabel.ImageTransparency = 0.5
+					Page.IconLabel.ImageColor3 = RGB(255, 255, 255)
 				end
 			end
 			for _, Sub in (Page.SubPages or {}) do
@@ -2559,55 +2594,43 @@ Library.ApplyTheme = function()
 				if Btn then
 					local Grad = Btn:FindFirstChildOfClass("UIGradient")
 					PaintGrad(Grad)
-					if not Sub.Opened then
+					if not (Page.ActiveSubPage == Sub) then
 						Btn.BackgroundColor3 = T.Background
 					end
 				end
 			end
 		end
+	end
+
+	-- Sections / elements walk
+	for _, Section in (Library.Sections or {}) do
+		local Frame = Section.Frame
+		if Frame and Frame.Parent then
+			pcall(function() Frame.BackgroundColor3 = T.Surface end)
+			local St = Frame:FindFirstChildOfClass("UIStroke")
+			if St then pcall(function() St.Color = T.SectionBorder or T.Border end) end
 		end
 	end
 
-	for _, Section in Library.Sections do
-		if Section.Frame then
-			Section.Frame.BackgroundColor3 = T.Surface
-			local Stroke = Section.Frame:FindFirstChildOfClass("UIStroke")
-			if Stroke then Stroke.Color = T.SectionBorder end
-			local Header = Section.Frame:FindFirstChild("Header")
-			if Header then
-				local Label = Header:FindFirstChild("Label")
-				if Label and Label:IsA("TextLabel") then
-					Label.TextColor3 = T.Text
-				end
-				local Icon = Header:FindFirstChild("Icon")
-				if Icon and Icon:IsA("ImageLabel") then
-					Icon.ImageColor3 = T.Accent
-				end
-			end
-		end
-	end
-
-	if Library.Watermark.Frame then
+	if Library.Watermark and Library.Watermark.Frame then
 		Library.Watermark.Frame.BackgroundColor3 = T.Surface
 		local Stroke = Library.Watermark.Frame:FindFirstChildOfClass("UIStroke")
 		if Stroke then Stroke.Color = T.Border end
 		if Library.Watermark.Accent then
 			Library.Watermark.Accent.BackgroundColor3 = T.Accent
-			local G = Library.Watermark.Accent:FindFirstChildOfClass("UIGradient")
-			PaintGrad(G)
+			PaintGrad(Library.Watermark.Accent:FindFirstChildOfClass("UIGradient"))
 		end
 		if Library.Watermark.Label then
 			Library.Watermark.Label.TextColor3 = T.Text
 		end
 	end
-	if Library.KeybindList.Frame then
+	if Library.KeybindList and Library.KeybindList.Frame then
 		Library.KeybindList.Frame.BackgroundColor3 = T.Surface
 		local Stroke = Library.KeybindList.Frame:FindFirstChildOfClass("UIStroke")
 		if Stroke then Stroke.Color = T.Border end
 		if Library.KeybindList.Accent then
 			Library.KeybindList.Accent.BackgroundColor3 = T.Accent
-			local G = Library.KeybindList.Accent:FindFirstChildOfClass("UIGradient")
-			PaintGrad(G)
+			PaintGrad(Library.KeybindList.Accent:FindFirstChildOfClass("UIGradient"))
 		end
 		local Header = Library.KeybindList.Frame:FindFirstChild("Header")
 		if Header then Header.BackgroundColor3 = T.SurfaceAlt end
