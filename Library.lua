@@ -2110,21 +2110,30 @@ Library.Window = function(self: Library, propertyTable: {})
 		LogoBtn.Image = ResolveIcon(Icon)
 	end
 
-	local PageButtons = Add("Frame", {
+	local PageButtons = Add("ScrollingFrame", {
 		Parent = Sidebar;
 		Name = "PageButtons";
 		BackgroundTransparency = 1;
 		BorderSizePixel = 0;
 		Position = UFO(0, 64);
 		Size = UD2(1, 0, 1, -64);
+		CanvasSize = UD2(0, 0, 0, 0);
+		AutomaticCanvasSize = AS.Y;
+		ScrollBarThickness = 2;
+		ScrollBarImageColor3 = Library.Theme.Accent;
+		ScrollBarImageTransparency = 0.55;
+		ScrollingDirection = SBD.Y;
+		ClipsDescendants = true;
+		Active = true;
 	})
+	Library.ThemeLink(PageButtons, "ScrollBarImageColor3", "Accent")
 	Add("UIListLayout", {
 		Parent = PageButtons;
-		Padding = UD(0, 4);
+		Padding = UD(0, 6);
 		HorizontalAlignment = HFA.Center;
 		SortOrder = SO.LayoutOrder;
 	})
-	Add("UIPadding", { Parent = PageButtons; PaddingTop = UD(0, 4); PaddingBottom = UD(0, 8); })
+	Add("UIPadding", { Parent = PageButtons; PaddingTop = UD(0, 6); PaddingBottom = UD(0, 12); PaddingLeft = UD(0, 0); PaddingRight = UD(0, 0); })
 	local Header = Add("Frame", { Parent = Canvas; Name = "Header"; BackgroundColor3 = Library.Theme.SurfaceAlt; BorderColor3 = RGB(0, 0, 0); BorderSizePixel = 0; Position = UFO(72, 0); Size = UD2(1, -72, 0, 50); }) :: Frame
 	Library.ThemeLink(Header, "BackgroundColor3", "SurfaceAlt")
 	local SubPages = Add("Frame", { Parent = Header; Name = "SubPages"; AutomaticSize = AS.X; BackgroundColor3 = RGB(255, 255, 255); BackgroundTransparency = 1; BorderColor3 = RGB(0, 0, 0); BorderSizePixel = 0; Size = UFS(0, 1); }) :: Frame
@@ -2137,8 +2146,7 @@ Library.Window = function(self: Library, propertyTable: {})
 	Add("UICorner", { Parent = Canvas; CornerRadius = UD(0, 5); })
 	Add("UICorner", { Parent = Sidebar; BottomLeftRadius = UD(0, 5); BottomRightRadius = UD(0, 0); TopLeftRadius = UD(0, 5); TopRightRadius = UD(0, 0); })
 	Add("UIStroke", { Parent = Sidebar; ApplyStrokeMode = ASM.Border; Color = RGB(36, 37, 37); })
-	Add("UIListLayout", { Parent = PageButtons; HorizontalAlignment = HFA.Center; Padding = UD(0, 5); SortOrder = SO.LayoutOrder; VerticalAlignment = VFA.Center; })
-	Add("UICorner", { Parent = Header; BottomLeftRadius = UD(0, 0); BottomRightRadius = UD(0, 0); TopLeftRadius = UD(0, 0); TopRightRadius = UD(0, 5); })
+		Add("UICorner", { Parent = Header; BottomLeftRadius = UD(0, 0); BottomRightRadius = UD(0, 0); TopLeftRadius = UD(0, 0); TopRightRadius = UD(0, 5); })
 	Add("UIStroke", { Parent = Header; ApplyStrokeMode = ASM.Border; Color = RGB(36, 37, 37); })
 	Add("UIListLayout", { Parent = SubPages; FillDirection = FD.Horizontal; Padding = UD(0, 10); SortOrder = SO.LayoutOrder; VerticalAlignment = VFA.Center; })
 	Add("UIPadding", { Parent = Header; PaddingBottom = UD(0, 10); PaddingLeft = UD(0, 10); PaddingRight = UD(0, 10); PaddingTop = UD(0, 10); })
@@ -2254,39 +2262,18 @@ Library.Window = function(self: Library, propertyTable: {})
 			AutoButtonColor = false;
 			BackgroundTransparency = 1;
 			BorderSizePixel = 0;
-			Size = UFO(56, 48);
+			Size = UFO(64, 52);
 			Text = "";
+			ClipsDescendants = false;
 		}) :: TextButton
 
-		-- Selected indicator (left edge gradient bar + soft glow)
-		local Indicator = Add("Frame", {
-			Parent = PageButton;
-			Name = "Indicator";
-			AnchorPoint = V2(0, 0.5);
-			Position = UD2(0, 0, 0.5, 0);
-			Size = UFO(3, 22);
-			BackgroundColor3 = RGB(255, 255, 255);
-			BorderSizePixel = 0;
-			BackgroundTransparency = 1;
-			ZIndex = 3;
-		})
-		Add("UICorner", { Parent = Indicator; CornerRadius = UD(0, 2); })
-		local IndGrad = Add("UIGradient", {
-			Parent = Indicator;
-			Color = CS{
-				CSK(0, Library.Theme.AccentDark),
-				CSK(0.5, Library.Theme.Accent),
-				CSK(1, Library.Theme.AccentDark),
-			};
-			Rotation = 90;
-		})
-		Library.ThemeLink(IndGrad, "Gradient", "AccentDark", "Accent")
+		-- Soft horizontal bloom from left edge (matches screenshot glow)
 		local IndGlow = Add("ImageLabel", {
 			Parent = PageButton;
 			Name = "IndicatorGlow";
 			AnchorPoint = V2(0, 0.5);
-			Position = UD2(0, -6, 0.5, 0);
-			Size = UFO(28, 40);
+			Position = UD2(0, -2, 0.5, 0);
+			Size = UFO(48, 52);
 			BackgroundTransparency = 1;
 			Image = "rbxassetid://8992230677";
 			ImageColor3 = Library.Theme.Accent;
@@ -2294,29 +2281,89 @@ Library.Window = function(self: Library, propertyTable: {})
 			ZIndex = 1;
 		})
 		Library.ThemeLink(IndGlow, "ImageColor3", "Accent")
+		local GlowFade = Add("UIGradient", {
+			Parent = IndGlow;
+			Transparency = NS{
+				NSK(0, 0.15),
+				NSK(0.45, 0.55),
+				NSK(1, 1),
+			};
+			Rotation = 0;
+		})
+
+		-- Crisp vertical light strip on the far left
+		local Indicator = Add("Frame", {
+			Parent = PageButton;
+			Name = "Indicator";
+			AnchorPoint = V2(0, 0.5);
+			Position = UD2(0, 0, 0.5, 0);
+			Size = UFO(2, 26);
+			BackgroundColor3 = Library.Theme.Accent;
+			BorderSizePixel = 0;
+			BackgroundTransparency = 1;
+			ZIndex = 4;
+		})
+		Add("UICorner", { Parent = Indicator; CornerRadius = UD(0, 2); })
+		Library.ThemeLink(Indicator, "BackgroundColor3", "Accent")
+		local IndGrad = Add("UIGradient", {
+			Parent = Indicator;
+			Color = CS{
+				CSK(0, Library.Theme.AccentDark),
+				CSK(0.5, RGB(255, 255, 255)),
+				CSK(1, Library.Theme.AccentDark),
+			};
+			Rotation = 90;
+		})
+		Library.ThemeLink(IndGrad, "Gradient", "AccentDark", "Accent")
+
+		-- Secondary soft bar for depth
+		local IndicatorSoft = Add("Frame", {
+			Parent = PageButton;
+			Name = "IndicatorSoft";
+			AnchorPoint = V2(0, 0.5);
+			Position = UD2(0, 0, 0.5, 0);
+			Size = UFO(4, 34);
+			BackgroundColor3 = Library.Theme.Accent;
+			BorderSizePixel = 0;
+			BackgroundTransparency = 1;
+			ZIndex = 3;
+		})
+		Add("UICorner", { Parent = IndicatorSoft; CornerRadius = UD(0, 3); })
+		Add("UIGradient", {
+			Parent = IndicatorSoft;
+			Transparency = NS{
+				NSK(0, 0.65),
+				NSK(0.5, 0.35),
+				NSK(1, 0.65),
+			};
+			Rotation = 90;
+		})
+		Library.ThemeLink(IndicatorSoft, "BackgroundColor3", "Accent")
 
 		local PageIcon = Add("ImageLabel", {
 			Parent = PageButton;
 			BackgroundTransparency = 1;
 			AnchorPoint = V2(0.5, 0.5);
-			Position = UFS(0.5, 0.5);
+			Position = UD2(0.5, 2, 0.5, 0);
 			Size = UFO(22, 22);
 			Image = ResolveIcon(Page.Icon);
-			ImageTransparency = 0.45;
+			ImageTransparency = 0.5;
 			ImageColor3 = RGB(255, 255, 255);
 			ScaleType = SCL.Fit;
-			ZIndex = 2;
+			ZIndex = 5;
 		}) :: ImageLabel
 
 		Page.Indicator = Indicator
+		Page.IndicatorSoft = IndicatorSoft
 		Page.IndicatorGlow = IndGlow
 		Page.IconLabel = PageIcon
 
 		PageContent(Page, Pages, Window.Pages, function()
 			Page.Opened = true
-			Tween(Indicator, { BackgroundTransparency = 0 }, 0.18)
-			Tween(IndGlow, { ImageTransparency = 0.55 }, 0.22)
-			Tween(PageIcon, { ImageTransparency = 0, ImageColor3 = Library.Theme.Accent }, 0.18)
+			Tween(Indicator, { BackgroundTransparency = 0 }, 0.2)
+			Tween(IndicatorSoft, { BackgroundTransparency = 0.45 }, 0.22)
+			Tween(IndGlow, { ImageTransparency = 0.42 }, 0.25)
+			Tween(PageIcon, { ImageTransparency = 0, ImageColor3 = RGB(255, 255, 255) }, 0.2)
 
 			for _, SubPage in Page.SubPages do
 				SubPage.Button.Visible = true
@@ -2329,8 +2376,9 @@ Library.Window = function(self: Library, propertyTable: {})
 		end, function()
 			Page.Opened = false
 			Tween(Indicator, { BackgroundTransparency = 1 }, 0.18)
+			Tween(IndicatorSoft, { BackgroundTransparency = 1 }, 0.18)
 			Tween(IndGlow, { ImageTransparency = 1 }, 0.18)
-			Tween(PageIcon, { ImageTransparency = 0.45, ImageColor3 = RGB(255, 255, 255) }, 0.18)
+			Tween(PageIcon, { ImageTransparency = 0.5, ImageColor3 = RGB(255, 255, 255) }, 0.18)
 
 			for _, SubPage in Page.SubPages do
 				SubPage.Button.Visible = false
