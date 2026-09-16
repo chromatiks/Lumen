@@ -2075,7 +2075,7 @@ Library.Window = function(self: Library, propertyTable: {})
 	local Sidebar = Add("Frame", { Parent = Canvas; Name = "Sidebar"; BackgroundColor3 = Library.Theme.Surface; BorderColor3 = RGB(0, 0, 0); BorderSizePixel = 0; Size = UD2(0, 75, 1, 0); }) :: Frame
 	Library.ThemeLink(Sidebar, "BackgroundColor3", "Surface")
 
-	-- Author logo / icon (top left) — height matches Header (50)
+	-- Author logo (top left) — larger than tab icons, soft bloom like reference
 	local LogoWrap = Add("Frame", {
 		Parent = Sidebar;
 		Name = "Logo";
@@ -2087,26 +2087,36 @@ Library.Window = function(self: Library, propertyTable: {})
 		Parent = LogoWrap;
 		AnchorPoint = V2(0.5, 0.5);
 		Position = UFS(0.5, 0.5);
-		Size = UFO(34, 34);
+		Size = UFO(32, 32);
 		BackgroundTransparency = 1;
 		Image = ResolveIcon(Window.Logo or Window.Icon or "hash");
-		ImageColor3 = Library.Theme.Accent;
+		ImageColor3 = RGB(255, 255, 255);
+		ImageTransparency = 0;
 		ScaleType = SCL.Fit;
-		ZIndex = 2;
+		ZIndex = 3;
 	})
-	Library.ThemeLink(LogoBtn, "ImageColor3", "Accent")
 	local LogoGlow = Add("ImageLabel", {
 		Parent = LogoWrap;
 		AnchorPoint = V2(0.5, 0.5);
 		Position = UFS(0.5, 0.5);
-		Size = UFO(58, 58);
+		Size = UFO(64, 64);
 		BackgroundTransparency = 1;
 		Image = "rbxassetid://8992230677";
-		ImageColor3 = Library.Theme.Accent;
-		ImageTransparency = 0.82;
+		ImageColor3 = RGB(255, 255, 255);
+		ImageTransparency = 0.72;
 		ZIndex = 1;
 	})
-	Library.ThemeLink(LogoGlow, "ImageColor3", "Accent")
+	local LogoGlow2 = Add("ImageLabel", {
+		Parent = LogoWrap;
+		AnchorPoint = V2(0.5, 0.5);
+		Position = UFS(0.5, 0.5);
+		Size = UFO(40, 40);
+		BackgroundTransparency = 1;
+		Image = "rbxassetid://8992230677";
+		ImageColor3 = RGB(255, 255, 255);
+		ImageTransparency = 0.85;
+		ZIndex = 2;
+	})
 	Window.LogoImage = LogoBtn
 	Window.SetLogo = function(_, Icon)
 		LogoBtn.Image = ResolveIcon(Icon)
@@ -2266,70 +2276,45 @@ Library.Window = function(self: Library, propertyTable: {})
 			ClipsDescendants = false;
 		}) :: TextButton
 
-		-- Soft vertical glow (screenshot-accurate)
-		local IndGlow = Add("Frame", {
-			Parent = PageButton;
-			Name = "IndicatorGlow";
-			AnchorPoint = V2(0, 0.5);
-			Position = UD2(0, 0, 0.5, 0);
-			Size = UFO(6, 28);
-			BackgroundColor3 = Library.Theme.Accent;
-			BorderSizePixel = 0;
-			BackgroundTransparency = 1;
-			ZIndex = 2;
-		})
-		Add("UICorner", { Parent = IndGlow; CornerRadius = UD(1, 0); })
-		Library.ThemeLink(IndGlow, "BackgroundColor3", "Accent")
-		Add("UIGradient", {
-			Parent = IndGlow;
-			Transparency = NS{
-				NSK(0, 0.85),
-				NSK(0.5, 0.25),
-				NSK(1, 0.85),
-			};
-			Rotation = 90;
-		})
-		-- Outer bloom fading right into sidebar
+		-- Soft left-edge selection glow (reference style)
 		local IndBloom = Add("ImageLabel", {
 			Parent = PageButton;
 			Name = "IndicatorBloom";
 			AnchorPoint = V2(0, 0.5);
-			Position = UD2(0, -4, 0.5, 0);
-			Size = UFO(22, 36);
+			Position = UD2(0, -8, 0.5, 0);
+			Size = UFO(36, 44);
 			BackgroundTransparency = 1;
 			Image = "rbxassetid://8992230677";
-			ImageColor3 = Library.Theme.Accent;
+			ImageColor3 = RGB(255, 255, 255);
 			ImageTransparency = 1;
 			ZIndex = 1;
 		})
-		Library.ThemeLink(IndBloom, "ImageColor3", "Accent")
 		Add("UIGradient", {
 			Parent = IndBloom;
 			Transparency = NS{
-				NSK(0, 0.2),
-				NSK(0.6, 0.75),
+				NSK(0, 0.15),
+				NSK(0.4, 0.55),
 				NSK(1, 1),
 			};
 		})
-		-- Thin bright core line
 		local Indicator = Add("Frame", {
 			Parent = PageButton;
 			Name = "Indicator";
 			AnchorPoint = V2(0, 0.5);
 			Position = UD2(0, 0, 0.5, 0);
-			Size = UFO(2, 20);
+			Size = UFO(3, 24);
 			BackgroundColor3 = RGB(255, 255, 255);
 			BorderSizePixel = 0;
 			BackgroundTransparency = 1;
-			ZIndex = 3;
+			ZIndex = 2;
 		})
 		Add("UICorner", { Parent = Indicator; CornerRadius = UD(1, 0); })
 		Add("UIGradient", {
 			Parent = Indicator;
 			Transparency = NS{
-				NSK(0, 0.55),
+				NSK(0, 0.7),
 				NSK(0.5, 0),
-				NSK(1, 0.55),
+				NSK(1, 0.7),
 			};
 			Rotation = 90;
 		})
@@ -2339,11 +2324,11 @@ Library.Window = function(self: Library, propertyTable: {})
 			BackgroundTransparency = 1;
 			BorderSizePixel = 0;
 			Image = ResolveIcon(Page.Icon);
-			ImageTransparency = 0.5;
+			ImageTransparency = 0.45;
 			ImageColor3 = RGB(255, 255, 255);
 			ScaleType = SCL.Fit;
 			Size = UFS(1, 1);
-			ZIndex = 4;
+			ZIndex = 3;
 		}) :: ImageLabel
 		Add("UIPadding", {
 			Parent = PageButton;
@@ -2354,16 +2339,14 @@ Library.Window = function(self: Library, propertyTable: {})
 		})
 
 		Page.Indicator = Indicator
-		Page.IndicatorGlow = IndGlow
 		Page.IndicatorBloom = IndBloom
 		Page.IconLabel = PageIcon
 
 		PageContent(Page, Pages, Window.Pages, function()
 			Page.Opened = true
-			Tween(Indicator, { BackgroundTransparency = 0 }, 0.18)
-			Tween(IndGlow, { BackgroundTransparency = 0.35 }, 0.2)
-			Tween(IndBloom, { ImageTransparency = 0.55 }, 0.22)
-			Tween(PageIcon, { ImageTransparency = 0 }, 0.18)
+			Tween(Indicator, { BackgroundTransparency = 0 }, 0.2)
+			Tween(IndBloom, { ImageTransparency = 0.5 }, 0.25)
+			Tween(PageIcon, { ImageTransparency = 0 }, 0.2)
 
 			for _, SubPage in Page.SubPages do
 				SubPage.Button.Visible = true
@@ -2376,9 +2359,8 @@ Library.Window = function(self: Library, propertyTable: {})
 		end, function()
 			Page.Opened = false
 			Tween(Indicator, { BackgroundTransparency = 1 }, 0.16)
-			Tween(IndGlow, { BackgroundTransparency = 1 }, 0.16)
 			Tween(IndBloom, { ImageTransparency = 1 }, 0.16)
-			Tween(PageIcon, { ImageTransparency = 0.5 }, 0.16)
+			Tween(PageIcon, { ImageTransparency = 0.45 }, 0.16)
 
 			for _, SubPage in Page.SubPages do
 				SubPage.Button.Visible = false
