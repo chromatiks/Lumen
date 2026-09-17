@@ -248,8 +248,8 @@ local Lucide = {
 }
 
 local function ResolveIcon(Icon: number | string?): string
-	if Icon == nil then
-		return "rbxassetid://" .. tostring(Lucide.hash)
+	if Icon == nil or Icon == "" then
+		return ""
 	end
 	if type(Icon) == "number" then
 		return "rbxassetid://" .. tostring(Icon)
@@ -258,13 +258,18 @@ local function ResolveIcon(Icon: number | string?): string
 	if AsString:match("^rbxasset") then
 		return AsString
 	end
+	-- bare numeric string → asset id
+	if AsString:match("^%d+$") then
+		return "rbxassetid://" .. AsString
+	end
 
-	local Name = AsString:lower():gsub("^lucide:", "")
-	local Id = Lucide[Name] or tonumber(AsString)
+	local Name = AsString:lower():gsub("^lucide:", ""):gsub("%s+", "-")
+	local Id = Lucide[Name] or Lucide[Name:gsub("-", "")]
 	if Id then
 		return "rbxassetid://" .. tostring(Id)
 	end
-	return "rbxassetid://" .. tostring(Lucide.hash)
+	-- unknown name: empty (caller can hide), never force hash
+	return ""
 end
 
 local function ClampToScreen(Object: GuiObject, Position: UDim2): UDim2
@@ -867,7 +872,7 @@ local function SectionBuilder(Container: Frame)
 	return function(self: Library, propertyTable: {})
 		local Section = Overwrite({
 			Name = "",
-			Icon = "hash",
+			Icon = "box",
 			Side = "Left",
 		}, propertyTable or {})
 		setmetatable(Section, { __index = Library.Elements })
@@ -2080,13 +2085,16 @@ Library.Window = function(self: Library, propertyTable: {})
 	local Sidebar = Add("Frame", { Parent = Canvas; Name = "Sidebar"; BackgroundColor3 = Library.Theme.Surface; BorderColor3 = RGB(0, 0, 0); BorderSizePixel = 0; Size = UD2(0, 75, 1, 0); }) :: Frame
 	Library.ThemeLink(Sidebar, "BackgroundColor3", "Surface")
 
-	-- Author logo (top left) with top padding from window edge
+	-- Author logo (only if Logo / Icon provided — no default hashtag)
+	local LogoSrc = Window.Logo or Window.Icon
+	local LogoH = (LogoSrc and LogoSrc ~= "") and 58 or 8
 	local LogoWrap = Add("Frame", {
 		Parent = Sidebar;
 		Name = "Logo";
 		BackgroundTransparency = 1;
-		Size = UD2(1, 0, 0, 58);
+		Size = UD2(1, 0, 0, LogoH);
 		BorderSizePixel = 0;
+		Visible = LogoH > 8;
 	})
 	Add("UIPadding", {
 		Parent = LogoWrap;
@@ -2098,11 +2106,12 @@ Library.Window = function(self: Library, propertyTable: {})
 		Position = UFS(0.5, 0.55);
 		Size = UFO(32, 32);
 		BackgroundTransparency = 1;
-		Image = ResolveIcon(Window.Logo or Window.Icon or "hash");
+		Image = ResolveIcon(LogoSrc);
 		ImageColor3 = RGB(255, 255, 255);
 		ImageTransparency = 0;
 		ScaleType = SCL.Fit;
 		ZIndex = 3;
+		Visible = LogoWrap.Visible;
 	})
 	local LogoGlow = Add("ImageLabel", {
 		Parent = LogoWrap;
@@ -2114,6 +2123,7 @@ Library.Window = function(self: Library, propertyTable: {})
 		ImageColor3 = Library.Theme.Accent;
 		ImageTransparency = 0.75;
 		ZIndex = 1;
+		Visible = LogoWrap.Visible;
 	})
 	Library.ThemeLink(LogoGlow, "ImageColor3", "Accent")
 	local LogoGlow2 = Add("ImageLabel", {
@@ -2126,20 +2136,18 @@ Library.Window = function(self: Library, propertyTable: {})
 		ImageColor3 = Library.Theme.Accent;
 		ImageTransparency = 0.88;
 		ZIndex = 2;
+		Visible = LogoWrap.Visible;
 	})
 	Library.ThemeLink(LogoGlow2, "ImageColor3", "Accent")
 	Window.LogoImage = LogoBtn
-	Window.SetLogo = function(_, Icon)
-		LogoBtn.Image = ResolveIcon(Icon)
-	end
 
 	local PageButtons = Add("ScrollingFrame", {
 		Parent = Sidebar;
 		Name = "PageButtons";
 		BackgroundTransparency = 1;
 		BorderSizePixel = 0;
-		Position = UFO(0, 58);
-		Size = UD2(1, 0, 1, -58);
+		Position = UFO(0, LogoH);
+		Size = UD2(1, 0, 1, -LogoH);
 		CanvasSize = UD2(0, 0, 0, 0);
 		AutomaticCanvasSize = AS.Y;
 		ScrollBarThickness = 0;
@@ -2210,7 +2218,21 @@ Library.Window = function(self: Library, propertyTable: {})
 		})
 	end)
 	Window.TabEditButton = EditHit
-	PageButtons.Size = UD2(1, 0, 1, -58 - 28)
+	PageButtons.Size = UD2(1, 0, 1, -LogoH - 28)
+	Window.SetLogo = function(_, Icon)
+		local Img = ResolveIcon(Icon)
+		LogoBtn.Image = Img
+		local Show = type(Img) == "string" and Img ~= ""
+		LogoWrap.Visible = Show
+		LogoBtn.Visible = Show
+		LogoGlow.Visible = Show
+		LogoGlow2.Visible = Show
+		local H = Show and 58 or 8
+		LogoWrap.Size = UD2(1, 0, 0, H)
+		PageButtons.Position = UFO(0, H)
+		PageButtons.Size = UD2(1, 0, 1, -H - 28)
+	end
+
 	local Header = Add("Frame", { Parent = Canvas; Name = "Header"; BackgroundColor3 = Library.Theme.SurfaceAlt; BorderColor3 = RGB(0, 0, 0); BorderSizePixel = 0; Position = UFO(75, 0); Size = UD2(1, -75, 0, 50); }) :: Frame
 	Library.ThemeLink(Header, "BackgroundColor3", "SurfaceAlt")
 	local SubPages = Add("Frame", { Parent = Header; Name = "SubPages"; AutomaticSize = AS.X; BackgroundColor3 = RGB(255, 255, 255); BackgroundTransparency = 1; BorderColor3 = RGB(0, 0, 0); BorderSizePixel = 0; Size = UFS(0, 1); }) :: Frame
