@@ -2179,7 +2179,7 @@ Library.Window = function(self: Library, propertyTable: {})
 		Size = UFO(8, 8);
 		Position = UD2(0, 1, 0.5, 0);
 		AnchorPoint = V2(0, 0.5);
-		BackgroundColor3 = RGB(160, 164, 175);
+		BackgroundColor3 = RGB(140, 144, 155);
 		BorderSizePixel = 0;
 		ZIndex = 6;
 	})
@@ -2345,34 +2345,35 @@ Library.Window = function(self: Library, propertyTable: {})
 			LayoutOrder = #Window.Pages;
 		}) :: TextButton
 
-		-- Aether-style soft glow (image only — no solid square)
-		local Glow = Add("Frame", {
-			Parent = PageButton;
-			Name = "Glow";
-			BackgroundTransparency = 1;
-			Size = UD2(0, 14, 1, 0);
-			Position = UD2(0, 0, 0, 0);
-			BorderSizePixel = 0;
-			BackgroundColor3 = Library.Theme.Accent;
-			ZIndex = 1;
-			Visible = true;
-		})
-		Add("UICorner", { Parent = Glow; CornerRadius = UD(0, 3); })
+		-- Soft radial selection bloom (centered behind icon)
 		local GlowImage = Add("ImageLabel", {
-			Parent = Glow;
+			Parent = PageButton;
 			Name = "GlowImage";
-			ImageColor3 = Library.Theme.Accent;
-			ScaleType = SCL.Slice;
-			ImageTransparency = 1;
+			AnchorPoint = V2(0.5, 0.5);
+			Position = UFS(0.5, 0.5);
+			Size = UFO(52, 52);
 			BackgroundTransparency = 1;
-			Size = UD2(1, 24, 1, 16);
-			Image = "rbxassetid://18245826428";
-			Position = UD2(0, -14, 0, -8);
-			ZIndex = 2;
+			Image = "rbxassetid://8992230677";
+			ImageColor3 = Library.Theme.Accent;
+			ImageTransparency = 1;
+			ZIndex = 1;
 			BorderSizePixel = 0;
-			SliceCenter = Rect.new(V2(20, 20), V2(80, 80));
 		})
 		Library.ThemeLink(GlowImage, "ImageColor3", "Accent")
+		local GlowInner = Add("ImageLabel", {
+			Parent = PageButton;
+			Name = "GlowInner";
+			AnchorPoint = V2(0.5, 0.5);
+			Position = UFS(0.5, 0.5);
+			Size = UFO(36, 36);
+			BackgroundTransparency = 1;
+			Image = "rbxassetid://8992230677";
+			ImageColor3 = Library.Theme.Accent;
+			ImageTransparency = 1;
+			ZIndex = 2;
+			BorderSizePixel = 0;
+		})
+		Library.ThemeLink(GlowInner, "ImageColor3", "Accent")
 
 		local PageIcon = Add("ImageLabel", {
 			Parent = PageButton;
@@ -2394,15 +2395,15 @@ Library.Window = function(self: Library, propertyTable: {})
 		})
 
 		Page.Button = PageButton
-		Page.Glow = Glow
 		Page.GlowImage = GlowImage
+		Page.GlowInner = GlowInner
 		Page.IconLabel = PageIcon
 		Page.LayoutOrder = PageButton.LayoutOrder
 
 		PageContent(Page, Pages, Window.Pages, function()
 			Page.Opened = true
-			-- Soft bloom only (never solid fill)
-			Tween(GlowImage, { ImageTransparency = 0.55 }, 0.22)
+			Tween(GlowImage, { ImageTransparency = 0.62 }, 0.22)
+			Tween(GlowInner, { ImageTransparency = 0.78 }, 0.22)
 			Tween(PageIcon, { ImageTransparency = 0, ImageColor3 = Library.Theme.Accent }, 0.2)
 
 			for _, SubPage in Page.SubPages do
@@ -2416,6 +2417,7 @@ Library.Window = function(self: Library, propertyTable: {})
 		end, function()
 			Page.Opened = false
 			Tween(GlowImage, { ImageTransparency = 1 }, 0.16)
+			Tween(GlowInner, { ImageTransparency = 1 }, 0.16)
 			Tween(PageIcon, { ImageTransparency = 0.45, ImageColor3 = RGB(255, 255, 255) }, 0.16)
 
 			for _, SubPage in Page.SubPages do
