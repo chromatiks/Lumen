@@ -2826,7 +2826,7 @@ Library.ApplyTheme = function()
 	end
 end
 
-Library.Folder = "Lumen"
+Library.Folder = "Noctro"
 Library.ConfigExtension = ".json"
 Library.Autoload = nil
 Library.MenuKey = EKC.LeftAlt
@@ -2860,7 +2860,7 @@ Library.SetConfigFolder = function(Path: string)
 	end
 	Path = Path:gsub("^/+", ""):gsub("/+$", ""):gsub("%.%.", "")
 	if Path == "" then
-		Path = "Lumen"
+		Path = "Noctro"
 	end
 	Library.Folder = Path
 	EnsureFolder()
@@ -3108,7 +3108,7 @@ end
 
 Library.SaveConfig = function(Name: string)
 	if not HasFS() then
-		warn("[Lumen] writefile/readfile unavailable in this environment")
+		warn("[Noctro] writefile/readfile unavailable in this environment")
 		return false
 	end
 	EnsureFolder()
@@ -3121,13 +3121,13 @@ Library.SaveConfig = function(Name: string)
 		return game:GetService("HttpService"):JSONEncode(Data)
 	end)
 	if not Ok then
-		warn("[Lumen] failed to encode config", Encoded)
+		warn("[Noctro] failed to encode config", Encoded)
 		return false
 	end
 	local Path = ConfigPath(Name)
 	local WOk, WErr = pcall(writefile, Path, Encoded)
 	if not WOk then
-		warn("[Lumen] writefile failed", WErr)
+		warn("[Noctro] writefile failed", WErr)
 		return false
 	end
 	return true
@@ -3135,7 +3135,7 @@ end
 
 Library.LoadConfig = function(Name: string)
 	if not HasFS() then
-		warn("[Lumen] writefile/readfile unavailable in this environment")
+		warn("[Noctro] writefile/readfile unavailable in this environment")
 		return false
 	end
 	Name = tostring(Name or "default")
@@ -3145,19 +3145,19 @@ Library.LoadConfig = function(Name: string)
 		Exists = isfile(Path)
 	end
 	if not Exists then
-		warn("[Lumen] config not found:", Name)
+		warn("[Noctro] config not found:", Name)
 		return false
 	end
 	local ROk, Raw = pcall(readfile, Path)
 	if not ROk then
-		warn("[Lumen] readfile failed", Raw)
+		warn("[Noctro] readfile failed", Raw)
 		return false
 	end
 	local Ok, Data = pcall(function()
 		return game:GetService("HttpService"):JSONDecode(Raw)
 	end)
 	if not Ok or type(Data) ~= "table" then
-		warn("[Lumen] invalid config:", Name)
+		warn("[Noctro] invalid config:", Name)
 		return false
 	end
 	Library.LoadConfigData(Data)
@@ -3233,14 +3233,14 @@ end
 
 Library.LoadingScreen = function(self: Library, propertyTable: {})
 	local Props = Overwrite({
-		Title = "Lumen";
+		Title = "Noctro";
 		Subtitle = "Loading…";
 		Duration = 1.6;
 	}, propertyTable or {})
 
 	local Gui = Add("ScreenGui", {
 		Parent = RunService:IsStudio() and Client.PlayerGui or Services:GetService("CoreGui");
-		Name = "LumenLoading";
+		Name = "NoctroLoading";
 		ZIndexBehavior = ZIB.Sibling;
 		IgnoreGuiInset = true;
 	})
@@ -3350,7 +3350,7 @@ end
 
 Library.Watermark = {
 	Enabled = true;
-	Text = "Lumen";
+	Text = "Noctro";
 	Frame = nil :: Frame?;
 }
 
@@ -3366,7 +3366,7 @@ local function EnsureOverlayGui()
 	end
 	Library._Overlay = Add("ScreenGui", {
 		Parent = RunService:IsStudio() and Client.PlayerGui or Services:GetService("CoreGui");
-		Name = "LumenOverlay";
+		Name = "NoctroOverlay";
 		ZIndexBehavior = ZIB.Sibling;
 		IgnoreGuiInset = true;
 	})
@@ -3446,7 +3446,7 @@ Library.SetWatermark = function(Text: string?, Enabled: boolean?)
 		return Chip("-", Order, true)
 	end
 
-	local CleanText = tostring(Library.Watermark.Text or "Lumen")
+	local CleanText = tostring(Library.Watermark.Text or "Noctro")
 
 	local Built = {}
 	for i = 1, #CleanText do
@@ -3462,11 +3462,11 @@ Library.SetWatermark = function(Text: string?, Enabled: boolean?)
 	CleanText = CleanText:gsub("%s+", " ")
 	CleanText = CleanText:gsub("^%s+", ""):gsub("%s+$", "")
 	if CleanText == "" then
-		CleanText = "Lumen"
+		CleanText = "Noctro"
 	end
 
 	if CleanText:match("^%d+$") then
-		CleanText = "Lumen"
+		CleanText = "Noctro"
 	end
 
 	local Title = Chip(CleanText, 1, false)
@@ -4032,7 +4032,7 @@ Library.Unload = function()
 	if Library._Instance then
 		Library._Instance:Destroy()
 	end
-	Library.Notify({ Title = "Lumen"; Text = "Unloaded"; Duration = 2 })
+	Library.Notify({ Title = "Noctro"; Text = "Unloaded"; Duration = 2 })
 end
 
 Library.ToggleMenu = function(State: boolean?)
@@ -4364,7 +4364,7 @@ Library.BuildConfigPage = function(self: Library, Window: any)
 		Width = 0.5;
 		Callback = function()
 			Library.ToggleMenu(false)
-			Library.Notify({ Title = "Lumen"; Text = "Menu hidden - press menu key"; Duration = 2 })
+			Library.Notify({ Title = "Noctro"; Text = "Menu hidden - press menu key"; Duration = 2 })
 		end;
 	})
 	MenuSection:Button({
@@ -4403,7 +4403,7 @@ Library.BuildConfigPage = function(self: Library, Window: any)
 	NotifySection:Button({
 		Name = "Test notification";
 		Callback = function()
-			Library.Notify({ Title = "Lumen"; Text = "This is a test notification"; Type = "Success" })
+			Library.Notify({ Title = "Noctro"; Text = "This is a test notification"; Type = "Success" })
 		end;
 	})
 
@@ -4923,7 +4923,7 @@ Library._MountKeySystem = function(Window)
 			end
 		end
 		if Library.Auth.WatermarkExpiry and Library.SetWatermark then
-			local Base = Library.Watermark.BaseText or Library.Watermark.Text or "Lumen"
+			local Base = Library.Watermark.BaseText or Library.Watermark.Text or "Noctro"
 			Library.SetWatermark(Base, Library.Watermark.Enabled)
 		end
 		Library.Notify({ Title = "Key system"; Content = "Welcome back"; Type = "Success"; Duration = 2.5 })
