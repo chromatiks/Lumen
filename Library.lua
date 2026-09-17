@@ -4664,3 +4664,193 @@ Library._MountKeySystem = function(Window)
 	})
 	RememberBtn.Activated:Connect(function()
 		RememberOn = not RememberOn
+		Tween(RememberBtn, { BackgroundColor3 = RememberOn and Library.Theme.Accent or Library.Theme.Surface }, 0.12)
+		Tween(Check, { TextTransparency = RememberOn and 0 or 1; TextColor3 = RememberOn and RGB(255, 255, 255) or Library.Theme.Accent }, 0.12)
+		Tween(RemStroke, { Transparency = RememberOn and 1 or 0 }, 0.12)
+	end)
+
+	local Error = Add("TextLabel", {
+		Parent = Form;
+		Position = UFO(0, 198);
+		Size = UD2(1, 0, 0, 16);
+		BackgroundTransparency = 1;
+		Text = "";
+		TextColor3 = RGB(240, 120, 120);
+		FontFace = FN("rbxassetid://12187365364", FW.SemiBold, FS.Normal);
+		TextSize = 12;
+		ZIndex = 82;
+	})
+
+	local NoteY = 178
+	if type(Opts.GetKey) == "string" and Opts.GetKey ~= "" then
+		local GetBtn = Add("TextButton", {
+			Parent = Form;
+			Position = UFO(0, NoteY);
+			Size = UD2(1, 0, 0, 16);
+			BackgroundTransparency = 1;
+			Text = "Get a key";
+			TextColor3 = T.Accent;
+			FontFace = FN("rbxassetid://12187365364", FW.SemiBold, FS.Normal);
+			TextSize = 12;
+			AutoButtonColor = false;
+			ZIndex = 82;
+		})
+		GetBtn.Activated:Connect(function()
+			pcall(function()
+				if setclipboard then
+					setclipboard(Opts.GetKey)
+					Library.Notify({ Title = "Key system"; Content = "Link copied"; Type = "Info"; Duration = 2 })
+				end
+			end)
+		end)
+	end
+
+	local Loading = Add("Frame", {
+		Parent = Canvas;
+		Name = "AuthLoading";
+		Size = UFS(1, 1);
+		BackgroundColor3 = T.Background or RGB(9, 8, 8);
+		BorderSizePixel = 0;
+		Visible = false;
+		ZIndex = 90;
+	})
+	Add("UICorner", { Parent = Loading; CornerRadius = UD(0, 5); })
+	Add("UIStroke", { Parent = Loading; ApplyStrokeMode = ASM.Border; Color = T.Border or RGB(36, 37, 37); })
+	Add("UIShadow", { Parent = Loading; BlurRadius = UD(0, 20); Spread = UFO(5, 5); Transparency = 0.65; })
+	Library.ThemeLink(Loading, "BackgroundColor3", "Background")
+	local Spin = Add("ImageLabel", {
+		Parent = Loading;
+		AnchorPoint = V2(0.5, 0.5);
+		Position = UD2(0.5, 0, 0.48, 0);
+		Size = UFO(40, 40);
+		BackgroundTransparency = 1;
+		Image = "rbxassetid://4965945816";
+		ImageColor3 = T.Accent;
+		ZIndex = 91;
+	})
+	Library.ThemeLink(Spin, "ImageColor3", "Accent")
+	Add("TextLabel", {
+		Parent = Loading;
+		AnchorPoint = V2(0.5, 0);
+		Position = UD2(0.5, 0, 0.48, 28);
+		Size = UFO(160, 18);
+		BackgroundTransparency = 1;
+		Text = "Signing in...";
+		TextColor3 = RGB(160, 160, 165);
+		FontFace = FN("rbxassetid://12187365364", FW.SemiBold, FS.Normal);
+		TextSize = 13;
+		ZIndex = 91;
+	})
+	local SpinConn = RunService.RenderStepped:Connect(function(dt)
+		if Loading.Visible then
+			Spin.Rotation = (Spin.Rotation + dt * 240) % 360
+		end
+	end)
+
+	local function RevealMenu()
+		Layer:Destroy()
+		Loading:Destroy()
+		if SpinConn then SpinConn:Disconnect() end
+		for Ch, Vis in pairs(Hidden) do
+			if Ch and Ch.Parent then
+				Ch.Visible = Vis ~= false
+			end
+		end
+		if Library.Auth.ShowExpiry and Library.Auth.ExpiresAt and Window.Canvas then
+			local Footer = Window.Canvas:FindFirstChild("Footer")
+			if Footer then
+				local Exp = Footer:FindFirstChild("KeyExpiry")
+				if not Exp then
+					Exp = Add("TextLabel", {
+						Parent = Footer;
+						Name = "KeyExpiry";
+						AnchorPoint = V2(0.5, 0.5);
+						Position = UFS(0.5, 0.5);
+						AutomaticSize = AS.X;
+						Size = UFO(0, 13);
+						BackgroundTransparency = 1;
+						FontFace = FN("rbxassetid://12187365364", FW.SemiBold, FS.Normal);
+						TextColor3 = Library.Theme.Accent;
+						TextSize = 12;
+						TextTransparency = 0.15;
+					})
+					Library.ThemeLink(Exp, "TextColor3", "Accent")
+				end
+				local function Tick()
+					if not Exp or not Exp.Parent then return end
+					Exp.Text = "Key · " .. Library.FormatExpiry(Library.Auth.ExpiresAt)
+					if Library.Auth.ExpiresAt and os.time() >= Library.Auth.ExpiresAt then
+						Library.Auth.Validated = false
+						Library.Auth.Token = nil
+						Library.Notify({ Title = "Key system"; Content = "License expired"; Type = "Error" })
+						pcall(function() Library.Unload() end)
+					end
+				end
+				Tick()
+				task.spawn(function()
+					while Exp and Exp.Parent and Library.Auth and Library.Auth.Validated do
+						Tick()
+						task.wait(30)
+					end
+				end)
+			end
+		end
+		if Library.Auth.WatermarkExpiry and Library.SetWatermark then
+			local Base = Library.Watermark.BaseText or Library.Watermark.Text or "Lumen"
+			Library.SetWatermark(Base, Library.Watermark.Enabled)
+		end
+		Library.Notify({ Title = "Key system"; Content = "Welcome back"; Type = "Success"; Duration = 2.5 })
+	end
+
+	local Busy = false
+	local function Attempt(Key)
+		if Busy then return end
+		Key = tostring(Key or ""):gsub("^%s+", ""):gsub("%s+$", "")
+		if Key == "" then
+			Error.Text = "Enter a license key."
+			return
+		end
+		Busy = true
+		Error.Text = ""
+		Layer.Visible = false
+		Loading.Visible = true
+
+		local finished = false
+		local function Finish(Success, ExpiresAt, Err)
+			if finished then return end
+			finished = true
+			if Success then
+				Library.Auth.Validated = true
+				Library.Auth.Token = tostring(os.clock()) .. tostring(math.random(100000, 999999))
+				Library.Auth.ExpiresAt = (type(ExpiresAt) == "number" and ExpiresAt) or nil
+				WriteRememberedKey(Key, RememberOn)
+				task.delay(0.55, RevealMenu)
+			else
+				Loading.Visible = false
+				Layer.Visible = true
+				Error.Text = Err or "Invalid key."
+				Busy = false
+			end
+		end
+
+		task.spawn(function()
+			RunValidate(Key, Finish)
+		end)
+	end
+
+	SignIn.Activated:Connect(function()
+		Attempt(KeyBox.Text)
+	end)
+	KeyBox.FocusLost:Connect(function(Enter)
+		if Enter then Attempt(KeyBox.Text) end
+	end)
+
+	local Saved = ReadRememberedKey()
+	if Saved then
+		KeyBox.Text = Saved
+		task.defer(function() Attempt(Saved) end)
+	end
+end
+
+
+return Library
