@@ -2156,50 +2156,61 @@ Library.Window = function(self: Library, propertyTable: {})
 	})
 
 	Window.TabEditMode = false
-	local EditBtn = Add("TextButton", {
+	-- Tiny lock/reorder toggle (bottom of sidebar)
+	local EditRow = Add("Frame", {
 		Parent = Sidebar;
 		Name = "TabEdit";
 		AnchorPoint = V2(0.5, 1);
-		Position = UD2(0.5, 0, 1, -10);
-		Size = UFO(28, 28);
-		BackgroundColor3 = Library.Theme.SurfaceAlt;
-		BackgroundTransparency = 0.3;
-		Text = "";
-		AutoButtonColor = false;
-		BorderSizePixel = 0;
+		Position = UD2(0.5, 0, 1, -8);
+		Size = UFO(36, 14);
+		BackgroundTransparency = 1;
 		ZIndex = 5;
 	})
-	Add("UICorner", { Parent = EditBtn; CornerRadius = UD(0, 6); })
-	local EditIcon = Add("ImageLabel", {
-		Parent = EditBtn;
-		BackgroundTransparency = 1;
+	local EditTrack = Add("Frame", {
+		Parent = EditRow;
 		Size = UFS(1, 1);
-		Image = ResolveIcon("menu");
-		ImageTransparency = 0.35;
-		ImageColor3 = RGB(255, 255, 255);
-		ScaleType = SCL.Fit;
+		BackgroundColor3 = Library.Theme.SurfaceAlt;
+		BorderSizePixel = 0;
 	})
-	Add("UIPadding", { Parent = EditBtn; PaddingTop = UD(0, 6); PaddingBottom = UD(0, 6); PaddingLeft = UD(0, 6); PaddingRight = UD(0, 6); })
-	EditBtn.Activated:Connect(function()
+	Add("UICorner", { Parent = EditTrack; CornerRadius = UD(1, 0); })
+	Library.ThemeLink(EditTrack, "BackgroundColor3", "SurfaceAlt")
+	local EditKnob = Add("Frame", {
+		Parent = EditTrack;
+		Size = UFO(12, 12);
+		Position = UD2(0, 1, 0.5, 0);
+		AnchorPoint = V2(0, 0.5);
+		BackgroundColor3 = RGB(180, 184, 200);
+		BorderSizePixel = 0;
+		ZIndex = 6;
+	})
+	Add("UICorner", { Parent = EditKnob; CornerRadius = UD(1, 0); })
+	local EditHit = Add("TextButton", {
+		Parent = EditRow;
+		Size = UFS(1, 1);
+		BackgroundTransparency = 1;
+		Text = "";
+		ZIndex = 7;
+	})
+	EditHit.Activated:Connect(function()
 		Window.TabEditMode = not Window.TabEditMode
-		Tween(EditIcon, {
-			ImageTransparency = Window.TabEditMode and 0 or 0.35;
-			ImageColor3 = Window.TabEditMode and Library.Theme.Accent or RGB(255, 255, 255);
-		}, 0.15)
-		Tween(EditBtn, {
-			BackgroundColor3 = Window.TabEditMode and Library.Theme.Accent or Library.Theme.SurfaceAlt;
-			BackgroundTransparency = Window.TabEditMode and 0.15 or 0.3;
-		}, 0.15)
+		local On = Window.TabEditMode
+		Tween(EditKnob, {
+			Position = On and UD2(1, -1, 0.5, 0) or UD2(0, 1, 0.5, 0);
+			AnchorPoint = On and V2(1, 0.5) or V2(0, 0.5);
+			BackgroundColor3 = On and Library.Theme.Accent or RGB(180, 184, 200);
+		}, 0.12)
+		Tween(EditTrack, {
+			BackgroundColor3 = On and Library.Theme.AccentDark or Library.Theme.SurfaceAlt;
+		}, 0.12)
 		Library.Notify({
 			Title = "Tabs";
-			Text = Window.TabEditMode and "Drag tabs to rearrange" or "Tab order locked";
+			Text = On and "Drag tabs to rearrange" or "Tab order locked";
 			Type = "Info";
-			Duration = 1.8;
+			Duration = 1.5;
 		})
 	end)
-	Window.TabEditButton = EditBtn
-	-- leave room for edit button
-	PageButtons.Size = UD2(1, 0, 1, -58 - 40)
+	Window.TabEditButton = EditHit
+	PageButtons.Size = UD2(1, 0, 1, -58 - 28)
 	local Header = Add("Frame", { Parent = Canvas; Name = "Header"; BackgroundColor3 = Library.Theme.SurfaceAlt; BorderColor3 = RGB(0, 0, 0); BorderSizePixel = 0; Position = UFO(75, 0); Size = UD2(1, -75, 0, 50); }) :: Frame
 	Library.ThemeLink(Header, "BackgroundColor3", "SurfaceAlt")
 	local SubPages = Add("Frame", { Parent = Header; Name = "SubPages"; AutomaticSize = AS.X; BackgroundColor3 = RGB(255, 255, 255); BackgroundTransparency = 1; BorderColor3 = RGB(0, 0, 0); BorderSizePixel = 0; Size = UFS(0, 1); }) :: Frame
@@ -2334,12 +2345,12 @@ Library.Window = function(self: Library, propertyTable: {})
 			LayoutOrder = #Window.Pages;
 		}) :: TextButton
 
-		-- Aether-style tab glow (rbxassetid://18245826428 slice)
+		-- Aether tab glow (exact asset + transparencies)
 		local Glow = Add("Frame", {
 			Parent = PageButton;
 			Name = "Glow";
 			BackgroundTransparency = 1;
-			Size = UD2(0, 20, 1, 0);
+			Size = UD2(0, 18, 1, 0);
 			BorderSizePixel = 0;
 			BackgroundColor3 = Library.Theme.Accent;
 			ZIndex = 1;
@@ -2352,6 +2363,7 @@ Library.Window = function(self: Library, propertyTable: {})
 			ImageColor3 = Library.Theme.Accent;
 			ScaleType = SCL.Slice;
 			ImageTransparency = 1;
+			BackgroundColor3 = Library.Theme.Accent;
 			BackgroundTransparency = 1;
 			Size = UD2(1, 20, 1, 20);
 			Image = "rbxassetid://18245826428";
@@ -2361,6 +2373,7 @@ Library.Window = function(self: Library, propertyTable: {})
 			SliceCenter = Rect.new(V2(20, 20), V2(80, 80));
 		})
 		Library.ThemeLink(GlowImage, "ImageColor3", "Accent")
+		Library.ThemeLink(GlowImage, "BackgroundColor3", "Accent")
 
 		local PageIcon = Add("ImageLabel", {
 			Parent = PageButton;
@@ -2389,7 +2402,9 @@ Library.Window = function(self: Library, propertyTable: {})
 
 		PageContent(Page, Pages, Window.Pages, function()
 			Page.Opened = true
-			Tween(GlowImage, { ImageTransparency = 0 }, 0.2)
+			-- Aether: GlowImage → 0.69, Glow bg → 0
+			Tween(GlowImage, { ImageTransparency = 0.69 }, 0.2)
+			Glow.BackgroundTransparency = 0
 			Tween(PageIcon, { ImageTransparency = 0, ImageColor3 = Library.Theme.Accent }, 0.2)
 
 			for _, SubPage in Page.SubPages do
@@ -2403,6 +2418,7 @@ Library.Window = function(self: Library, propertyTable: {})
 		end, function()
 			Page.Opened = false
 			Tween(GlowImage, { ImageTransparency = 1 }, 0.16)
+			Glow.BackgroundTransparency = 1
 			Tween(PageIcon, { ImageTransparency = 0.45, ImageColor3 = RGB(255, 255, 255) }, 0.16)
 
 			for _, SubPage in Page.SubPages do
@@ -2414,44 +2430,153 @@ Library.Window = function(self: Library, propertyTable: {})
 			end
 		end)
 
-		-- Tab rearrange when Window.TabEditMode
+		-- Drag-reorder with ghost slot (only when TabEditMode)
 		do
 			local Dragging = false
-			local StartY = 0
-			local StartOrder = 0
+			local Ghost = nil
+			local Placeholder = nil
+			local OriginOrder = 0
+			local StartAbsY = 0
+
+			local function ClearGhost()
+				if Ghost then Ghost:Destroy() Ghost = nil end
+				if Placeholder then Placeholder:Destroy() Placeholder = nil end
+			end
+
+			local function GetOrders()
+				local List = {}
+				for _, P in Window.Pages do
+					if P.Button and P.Button.Parent then
+						TIS(List, P)
+					end
+				end
+				table.sort(List, function(a, b)
+					return a.Button.LayoutOrder < b.Button.LayoutOrder
+				end)
+				return List
+			end
+
+			local function Relayout(InsertIndex, Exclude)
+				local List = {}
+				for _, P in Window.Pages do
+					if P ~= Exclude and P.Button then
+						TIS(List, P)
+					end
+				end
+				table.sort(List, function(a, b)
+					return a.Button.LayoutOrder < b.Button.LayoutOrder
+				end)
+				InsertIndex = MC(InsertIndex, 0, #List)
+				if Placeholder then
+					Placeholder.Parent = PageButtons
+					Placeholder.LayoutOrder = InsertIndex * 2
+					Placeholder.Visible = true
+				end
+				for Index, P in List do
+					local Slot = Index - 1
+					if Slot >= InsertIndex then
+						Slot = Slot + 1
+					end
+					P.Button.LayoutOrder = Slot * 2
+					P.LayoutOrder = P.Button.LayoutOrder
+				end
+			end
+
 			PageButton.InputBegan:Connect(function(Input)
 				if not Window.TabEditMode then return end
 				if Input.UserInputType ~= UIT.MouseButton1 and Input.UserInputType ~= UIT.Touch then return end
+				if Dragging then return end
 				Dragging = true
-				StartY = Input.Position.Y
-				StartOrder = PageButton.LayoutOrder
-				local Conn
-				Conn = Input.Changed:Connect(function()
-					if Input.UserInputState == Enum.UserInputState.End then
-						Dragging = false
-						if Conn then Conn:Disconnect() end
-						Library.SaveLayout()
+				OriginOrder = PageButton.LayoutOrder
+				StartAbsY = Input.Position.Y
+
+				PageButton.Visible = false
+
+				Placeholder = Add("Frame", {
+					Parent = PageButtons;
+					Name = "TabPlaceholder";
+					Size = UFO(45, 45);
+					BackgroundColor3 = Library.Theme.Accent;
+					BackgroundTransparency = 0.85;
+					BorderSizePixel = 0;
+					LayoutOrder = OriginOrder;
+				})
+				Add("UICorner", { Parent = Placeholder; CornerRadius = UD(0, 6); })
+				Add("UIStroke", {
+					Parent = Placeholder;
+					Color = Library.Theme.Accent;
+					Transparency = 0.4;
+					Thickness = 1;
+				})
+
+				Ghost = Add("Frame", {
+					Parent = Library._Instance;
+					Name = "TabGhost";
+					Size = UFO(45, 45);
+					BackgroundTransparency = 1;
+					ZIndex = 100;
+				})
+				local GIcon = Add("ImageLabel", {
+					Parent = Ghost;
+					BackgroundTransparency = 1;
+					Size = UFS(1, 1);
+					Image = PageIcon.Image;
+					ImageColor3 = Library.Theme.Accent;
+					ImageTransparency = 0.25;
+					ScaleType = SCL.Fit;
+				})
+				Add("UIPadding", {
+					Parent = Ghost;
+					PaddingBottom = UD(0, 12);
+					PaddingLeft = UD(0, 12);
+					PaddingRight = UD(0, 12);
+					PaddingTop = UD(0, 12);
+				})
+				local Abs = PageButton.AbsolutePosition
+				Ghost.Position = UFO(Abs.X, Abs.Y)
+
+				local MoveConn
+				local EndConn
+				MoveConn = UserInputService.InputChanged:Connect(function(Move)
+					if not Dragging then return end
+					if Move.UserInputType ~= UIT.MouseMovement and Move.UserInputType ~= UIT.Touch then return end
+					if Ghost then
+						Ghost.Position = UFO(Move.Position.X - 22, Move.Position.Y - 22)
 					end
-				end)
-			end)
-			UserInputService.InputChanged:Connect(function(Input)
-				if not Dragging or not Window.TabEditMode then return end
-				if Input.UserInputType ~= UIT.MouseMovement and Input.UserInputType ~= UIT.Touch then return end
-				local Dy = Input.Position.Y - StartY
-				local Step = 50
-				local Delta = math.floor((Dy / Step) + 0.5)
-				local NewOrder = math.max(0, StartOrder + Delta)
-				if NewOrder ~= PageButton.LayoutOrder then
-					-- swap with page at target order
-					for _, Other in Window.Pages do
-						if Other ~= Page and Other.Button and Other.Button.LayoutOrder == NewOrder then
-							Other.Button.LayoutOrder = PageButton.LayoutOrder
-							Other.LayoutOrder = Other.Button.LayoutOrder
+					-- find insert index from mouse Y relative to page buttons
+					local List = GetOrders()
+					local Insert = #List
+					for Index, P in List do
+						if P == Page then continue end
+						local Mid = P.Button.AbsolutePosition.Y + P.Button.AbsoluteSize.Y * 0.5
+						if Move.Position.Y < Mid then
+							Insert = Index - 1
+							break
 						end
+						Insert = Index
 					end
-					PageButton.LayoutOrder = NewOrder
-					Page.LayoutOrder = NewOrder
-				end
+					Relayout(Insert, Page)
+				end)
+				EndConn = UserInputService.InputEnded:Connect(function(End)
+					if End.UserInputType ~= UIT.MouseButton1 and End.UserInputType ~= UIT.Touch then return end
+					if not Dragging then return end
+					Dragging = false
+					if MoveConn then MoveConn:Disconnect() end
+					if EndConn then EndConn:Disconnect() end
+
+					local FinalOrder = Placeholder and Placeholder.LayoutOrder or OriginOrder
+					ClearGhost()
+					PageButton.Visible = true
+					PageButton.LayoutOrder = FinalOrder
+					Page.LayoutOrder = FinalOrder
+					-- normalize 0,1,2...
+					local List = GetOrders()
+					for Index, P in List do
+						P.Button.LayoutOrder = Index - 1
+						P.LayoutOrder = Index - 1
+					end
+					pcall(function() Library.SaveLayout() end)
+				end)
 			end)
 		end
 
